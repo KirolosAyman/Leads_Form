@@ -7,9 +7,15 @@ from app import models, auth
 
 def test_login():
     db = SessionLocal()
-    
-    email = "admin@inno.com"
-    password = "admin!nno"
+    # Read admin credentials from environment variables
+    email = os.getenv("ADMIN_EMAIL")
+    password = os.getenv("ADMIN_PASSWORD")
+
+    if not email or not password:
+        print("ERROR: ADMIN_EMAIL and ADMIN_PASSWORD environment variables must be set to run this test.")
+        print("Set them and re-run, or run 'python seed_db.py' after exporting them to create the admin user.")
+        db.close()
+        return
     
     # Get user from database
     user = db.query(models.User).filter(models.User.email == email).first()

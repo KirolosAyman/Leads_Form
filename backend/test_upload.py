@@ -3,8 +3,13 @@ import os
 
 # Configuration
 BASE_URL = "http://localhost:8000"
-EMAIL = "admin@inno.com"
-PASSWORD = "admin!nno"
+EMAIL = os.getenv("ADMIN_EMAIL")
+PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+if not EMAIL or not PASSWORD:
+    print("ERROR: ADMIN_EMAIL and ADMIN_PASSWORD environment variables must be set to run this test.")
+    print("Set them and re-run, or run 'python seed_db.py' after exporting them to create the admin user.")
+    exit(1)
 
 def test_upload():
     print("=" * 60)

@@ -13,9 +13,19 @@ Base.metadata.create_all(bind=engine)
 
 def create_admin():
     db = SessionLocal()
-    
-    email = "admin@inno.com"
-    password = "admin!nno"
+    # Read admin credentials from environment variables to avoid hardcoding
+    email = os.getenv("ADMIN_EMAIL")
+    password = os.getenv("ADMIN_PASSWORD")
+
+    if not email or not password:
+        print("ERROR: ADMIN_EMAIL and ADMIN_PASSWORD environment variables must be set.")
+        print("Example (Windows PowerShell):")
+        print("  $env:ADMIN_EMAIL='admin@yourdomain.com' ; $env:ADMIN_PASSWORD='StrongP@ssw0rd' ; python seed_db.py")
+        print("")
+        print("Alternatively, you can run an SQL INSERT into the users table after hashing a password.")
+        print("See README or EXCEL_UPLOAD_GUIDE.md for examples.")
+        db.close()
+        return
     
     existing_user = db.query(models.User).filter(models.User.email == email).first()
     if existing_user:
@@ -24,7 +34,8 @@ def create_admin():
         hashed_password = auth.get_password_hash(password)
         existing_user.hashed_password = hashed_password
         db.commit()
-        print(f"Password reset to: {password}")
+        print(f"Password for {email} has been reset.")
+        db.close()
         return
 
     hashed_password = auth.get_password_hash(password)
@@ -40,10 +51,8 @@ def create_admin():
     
     db.add(admin_user)
     db.commit()
-    print(f"Admin user created successfully.")
-    print(f"Email: {email}")
-    print(f"Password: {password}")
-    
+    print(f"Admin user created successfully: {email}")
+    print("NOTE: Keep ADMIN_EMAIL and ADMIN_PASSWORD set securely (do not commit to source).")
     db.close()
 
 if __name__ == "__main__":

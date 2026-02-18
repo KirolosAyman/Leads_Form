@@ -25,7 +25,7 @@ def recreate_database():
     
     print("\n[OK] Database recreated successfully!")
     print("\nNext steps:")
-    print("1. Run 'python seed_db.py' to create the admin user")
+    print("1. Run 'python seed_db.py' to create the admin user (set ADMIN_EMAIL and ADMIN_PASSWORD env vars before running)")
     print("2. Upload your Excel file with leads data")
 
 if __name__ == "__main__":

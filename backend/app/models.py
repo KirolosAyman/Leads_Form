@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Text, ForeignKey
 from datetime import datetime
 import enum
 from .database import Base
+from sqlalchemy.orm import relationship
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
@@ -25,23 +26,39 @@ class Lead(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Required fields from Excel
-    contact_id = Column(String, unique=True, index=True, nullable=False)
-    phone = Column(String, index=True, nullable=False)  # Primary search field
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
-    title = Column(String, nullable=False)
-    company = Column(String, nullable=False)
-    street = Column(String, nullable=False)
-    city = Column(String, nullable=False)
-    state = Column(String, nullable=False)
-    zip = Column(String, nullable=False)
+    contact_id = Column(String, index=True, nullable=True)
+    phone = Column(String, index=True, nullable=True)  # Primary search field
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    title = Column(String, nullable=True)
+    company = Column(String, nullable=True)
+    street = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    state = Column(String, nullable=True)
+    zip = Column(String, nullable=True)
     web_site = Column(String, nullable=True)  # Can be NULL
     annual_sales = Column(String, nullable=True)  # Can be NULL
     employee_count = Column(String, nullable=True)  # Can be NULL
-    sic_code = Column(String, nullable=False)
+    sic_code = Column(String, nullable=True)
     industry = Column(String, nullable=True)  # Can be NULL
-    recording = Column(String, nullable=False)
+    recording = Column(String, nullable=True)
+    
+    # Status tracking
+    is_submitted = Column(Boolean, default=False, index=True)
     
     # Tracking
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LeadSubmission(Base):
+    __tablename__ = "lead_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey('leads.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    submitted_at = Column(DateTime, default=datetime.utcnow)
+    details = Column(Text, nullable=True)  # JSON/text snapshot of lead at submission
+
+    lead = relationship('Lead', backref='submissions')
+    user = relationship('User')

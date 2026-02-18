@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import List
@@ -23,144 +25,238 @@ async def upload_leads(
     current_user: models.User = Depends(auth.require_admin)
 ):
     """
-    Upload leads from an Excel file (.xlsx).
-    Strict validation: rejects files with missing required values or incorrect columns.
+    Upload leads from a file. We'll try to read as Excel first, then CSV.
+    This endpoint no longer enforces strict column constraints so you can
+    upload varied test files; missing columns will be saved as NULLs.
     """
-    # Validate file extension
-    if not file.filename.endswith(".xlsx"):
-        raise HTTPException(
-            status_code=400, 
-            detail="Invalid file format. Only .xlsx files are accepted."
-        )
-    
     contents = await file.read()
-    
-    # Read Excel file
+
+    # Try reading as Excel first; if that fails, try CSV. If both fail, return error.
+    df = None
+    read_error = None
     try:
-        df = pd.read_excel(io.BytesIO(contents))
-    except Exception as e:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Error reading Excel file: {str(e)}"
-        )
-    
-    # Validate columns exist
-    all_required_columns = REQUIRED_COLUMNS
-    missing_cols = [col for col in all_required_columns if col not in df.columns]
-    
-    if missing_cols:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Missing required columns: {', '.join(missing_cols)}"
-        )
-    
-    # Check for extra columns that shouldn't be there
-    expected_columns = set(REQUIRED_COLUMNS + OPTIONAL_COLUMNS)
-    actual_columns = set(df.columns)
-    extra_columns = actual_columns - expected_columns
-    
-    if extra_columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unexpected columns found: {', '.join(extra_columns)}. Only these columns are allowed: {', '.join(sorted(expected_columns))}"
-        )
-    
-    # Strict validation: Check for missing values in REQUIRED columns
-    for col in REQUIRED_COLUMNS:
-        null_count = df[col].isna().sum()
-        if null_count > 0:
-            # Find the row numbers with null values
-            null_rows = df[df[col].isna()].index.tolist()
-            raise HTTPException(
-                status_code=400,
-                detail=f"Missing values detected in required column '{col}' at row(s): {', '.join(map(str, [r+2 for r in null_rows]))} (Excel row numbers)"
-            )
-    
-    # Additional validation: Check for empty strings in required columns
-    for col in REQUIRED_COLUMNS:
-        empty_mask = df[col].astype(str).str.strip() == ''
-        empty_count = empty_mask.sum()
-        if empty_count > 0:
-            empty_rows = df[empty_mask].index.tolist()
-            raise HTTPException(
-                status_code=400,
-                detail=f"Empty values detected in required column '{col}' at row(s): {', '.join(map(str, [r+2 for r in empty_rows]))} (Excel row numbers)"
-            )
-    
-    # Process and save leads
+        # try reading Excel; read all sheets so we don't miss data on other sheets
+        try:
+            xls = pd.read_excel(io.BytesIO(contents), sheet_name=None)
+            # xls is a dict of DataFrames; concatenate non-empty sheets
+            if isinstance(xls, dict):
+                sheets = [df for df in xls.values() if not df.empty]
+                if sheets:
+                    df = pd.concat(sheets, ignore_index=True)
+                else:
+                    df = pd.DataFrame()
+            else:
+                df = xls
+        except Exception as e:
+            read_error = e
+            df = pd.read_csv(io.BytesIO(contents))
+    except Exception as e2:
+        raise HTTPException(status_code=400, detail=f"Could not read file as Excel or CSV: {read_error}; {e2}")
+
+    # normalize columns to lowercase stripped names for easier mapping
+    df.columns = [str(c).strip().lower() for c in df.columns]
+
+    # Process and save leads without strict validation: missing columns become None
     success_count = 0
     errors = []
     duplicates = []
-    
+
+    # target fields we support (will be read if present)
+    target_fields = [
+        "contact_id","phone","first_name","last_name","title","company",
+        "street","city","state","zip","web_site","annual_sales",
+        "employee_count","sic_code","industry","recording"
+    ]
+
     for idx, row in df.iterrows():
         try:
-            # Convert row to dict and handle NULL values for optional fields
-            lead_data = {
-                "contact_id": str(row["contact_id"]).strip(),
-                "phone": str(row["phone"]).strip(),
-                "first_name": str(row["first_name"]).strip(),
-                "last_name": str(row["last_name"]).strip(),
-                "title": str(row["title"]).strip(),
-                "company": str(row["company"]).strip(),
-                "street": str(row["street"]).strip(),
-                "city": str(row["city"]).strip(),
-                "state": str(row["state"]).strip(),
-                "zip": str(row["zip"]).strip(),
-                "sic_code": str(row["sic_code"]).strip(),
-                "recording": str(row["recording"]).strip(),
-            }
-            
-            # Handle optional fields - convert NULL/NaN to None
-            for opt_col in OPTIONAL_COLUMNS:
-                if opt_col in df.columns:
-                    val = row[opt_col]
-                    if pd.isna(val) or str(val).upper() == 'NULL':
-                        lead_data[opt_col] = None
+            lead_data = {}
+            for field in target_fields:
+                if field in df.columns:
+                    val = row[field]
+                    if pd.isna(val):
+                        lead_data[field] = None
                     else:
-                        lead_data[opt_col] = str(val).strip()
+                        lead_data[field] = str(val).strip()
                 else:
-                    lead_data[opt_col] = None
-            
-            # Check if lead already exists by contact_id or phone
-            existing_by_contact = db.query(models.Lead).filter(
-                models.Lead.contact_id == lead_data["contact_id"]
-            ).first()
-            
-            existing_by_phone = crud.get_lead_by_phone(db, lead_data["phone"])
-            
-            if existing_by_contact or existing_by_phone:
-                duplicates.append(
-                    f"Row {idx+2}: contact_id={lead_data['contact_id']}, phone={lead_data['phone']}"
-                )
-                continue
-            
-            # Create and save lead
-            lead_in = schemas.LeadCreate(**lead_data)
-            crud.create_lead(db, lead_in)
-            success_count += 1
-            
+                    lead_data[field] = None
+            # Skip if phone already exists (treat as duplicate)
+            phone_val = lead_data.get('phone')
+            if phone_val:
+                existing = db.query(models.Lead).filter(models.Lead.phone == phone_val).first()
+                if existing:
+                    duplicates.append(f"Row {idx+2}: duplicate phone={phone_val}")
+                    continue
+
+            # create model instance directly (bypass strict pydantic validation for uploads)
+            db_lead = models.Lead(**lead_data)
+            db.add(db_lead)
+            try:
+                db.commit()
+                db.refresh(db_lead)
+                success_count += 1
+            except IntegrityError as ie:
+                db.rollback()
+                errors.append(f"Row {idx+2}: Integrity error - {str(ie)}")
+            except Exception as e:
+                db.rollback()
+                errors.append(f"Row {idx+2}: {str(e)}")
         except Exception as e:
             errors.append(f"Row {idx+2}: {str(e)}")
     
     response = {
-        "message": "Upload processed successfully",
+        "message": "Upload processed",
         "total_rows": len(df),
         "success_count": success_count,
-        "duplicate_count": len(duplicates),
-        "error_count": len(errors)
+        "error_count": len(errors),
+        "duplicate_count": len(duplicates)
     }
-    
-    if duplicates:
-        response["duplicates"] = duplicates[:10]  # Show first 10
-        if len(duplicates) > 10:
-            response["duplicates_note"] = f"Showing first 10 of {len(duplicates)} duplicates"
-    
+
     if errors:
-        response["errors"] = errors[:10]  # Show first 10
-        if len(errors) > 10:
-            response["errors_note"] = f"Showing first 10 of {len(errors)} errors"
-    
+        response["errors"] = errors[:20]
+    # If nothing was processed, return some debug info to help identify column/name mismatches
+    if success_count == 0:
+        response["columns"] = list(df.columns)
+        # include up to 3 sample rows
+        try:
+            response["sample_rows"] = df.head(3).to_dict(orient="records")
+        except Exception:
+            response["sample_rows"] = []
+
+    if duplicates:
+        response["duplicates"] = duplicates[:50]
+
     return response
+
+
+@router.get("/leads", response_model=List[schemas.LeadOut])
+async def list_leads(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
+    leads = db.query(models.Lead).all()
+    return leads
+
+
+@router.get("/leads/export")
+async def export_leads(format: str = 'csv', db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
+    """Export leads as CSV or Excel. Set ?format=csv or ?format=xlsx"""
+    leads = db.query(models.Lead).all()
+    # Convert to DataFrame
+    rows = []
+    for l in leads:
+        rows.append({
+            'id': l.id,
+            'contact_id': l.contact_id,
+            'phone': l.phone,
+            'first_name': l.first_name,
+            'last_name': l.last_name,
+            'title': l.title,
+            'company': l.company,
+            'street': l.street,
+            'city': l.city,
+            'state': l.state,
+            'zip': l.zip,
+            'web_site': l.web_site,
+            'annual_sales': l.annual_sales,
+            'employee_count': l.employee_count,
+            'sic_code': l.sic_code,
+            'industry': l.industry,
+            'recording': l.recording,
+            'is_submitted': l.is_submitted,
+            'created_at': l.created_at,
+            'updated_at': l.updated_at,
+        })
+
+    df = pd.DataFrame(rows)
+
+    if format == 'xlsx':
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+        output.seek(0)
+        return StreamingResponse(output, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={"Content-Disposition": "attachment; filename=leads.xlsx"})
+    else:
+        # default CSV
+        output = io.StringIO()
+        df.to_csv(output, index=False)
+        output.seek(0)
+        return StreamingResponse(io.BytesIO(output.getvalue().encode('utf-8')), media_type='text/csv', headers={"Content-Disposition": "attachment; filename=leads.csv"})
+
+
+class DeleteLeadsRequest(BaseModel):
+    ids: List[int]
+
+
+@router.post("/leads/delete")
+async def delete_leads(req: DeleteLeadsRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
+    ids = req.ids or []
+    if not ids:
+        raise HTTPException(status_code=400, detail="No ids provided")
+
+    deleted = 0
+    for lid in ids:
+        lead = db.query(models.Lead).filter(models.Lead.id == lid).first()
+        if lead:
+            db.delete(lead)
+            deleted += 1
+
+    db.commit()
+    return {"deleted": deleted}
+
+
+@router.get('/leads/submissions')
+async def list_submissions(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
+    subs = db.query(models.LeadSubmission).order_by(models.LeadSubmission.submitted_at.desc()).all()
+    # return structured list
+    out = []
+    import json
+    for s in subs:
+        try:
+            details = json.loads(s.details) if s.details else None
+        except Exception:
+            details = s.details
+        out.append({
+            'id': s.id,
+            'lead_id': s.lead_id,
+            'user_id': s.user_id,
+            'submitted_at': s.submitted_at,
+            'details': details
+        })
+    return out
+
+
+@router.get('/leads/submissions/export')
+async def export_submissions(format: str = 'csv', db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
+    subs = db.query(models.LeadSubmission).order_by(models.LeadSubmission.submitted_at.desc()).all()
+    rows = []
+    import json
+    for s in subs:
+        try:
+            details = json.loads(s.details) if s.details else {}
+        except Exception:
+            details = {}
+        rows.append({
+            'submission_id': s.id,
+            'lead_id': s.lead_id,
+            'user_id': s.user_id,
+            'submitted_at': s.submitted_at,
+            'lead_contact_id': details.get('contact_id'),
+            'lead_phone': details.get('phone'),
+            'lead_first_name': details.get('first_name'),
+            'lead_last_name': details.get('last_name'),
+            'submitted_by_email': details.get('submitted_by', {}).get('email') if details else None
+        })
+
+    df = pd.DataFrame(rows)
+    if format == 'xlsx':
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+        output.seek(0)
+        return StreamingResponse(output, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={"Content-Disposition": "attachment; filename=submissions.xlsx"})
+    else:
+        output = io.StringIO()
+        df.to_csv(output, index=False)
+        output.seek(0)
+        return StreamingResponse(io.BytesIO(output.getvalue().encode('utf-8')), media_type='text/csv', headers={"Content-Disposition": "attachment; filename=submissions.csv"})
 
 @router.get("/leads/search/{phone_number}", response_model=schemas.LeadOut)
 async def search_lead(
@@ -184,4 +280,52 @@ async def update_lead(
     lead = crud.update_lead(db, lead_id, lead_update)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+@router.post("/leads/{lead_id}/submit", response_model=schemas.LeadOut)
+async def submit_lead(
+    lead_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    """Toggle the submission status of a lead"""
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    # Toggle
+    lead.is_submitted = not lead.is_submitted
+
+    # If being marked submitted, create a submission record
+    if lead.is_submitted:
+        try:
+            # create a JSON/text snapshot of relevant lead data and user info
+            snapshot = {
+                'lead_id': lead.id,
+                'contact_id': lead.contact_id,
+                'phone': lead.phone,
+                'first_name': lead.first_name,
+                'last_name': lead.last_name,
+                'company': lead.company,
+                'title': lead.title,
+                'submitted_by': {
+                    'id': current_user.id,
+                    'email': current_user.email,
+                    'first_name': current_user.first_name,
+                    'last_name': current_user.last_name,
+                }
+            }
+            import json
+            submission = models.LeadSubmission(
+                lead_id=lead.id,
+                user_id=current_user.id,
+                details=json.dumps(snapshot)
+            )
+            db.add(submission)
+        except Exception:
+            # don't block submission toggle on snapshot errors
+            pass
+
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
     return lead

@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from .. import database, models, schemas, crud, auth
+import secrets
+import string
 
 router = APIRouter()
 
@@ -43,3 +45,24 @@ async def create_agent_with_password_return(
     
     new_user, password = crud.create_user(db=db, user=user, role=models.UserRole.AGENT)
     return {"user": new_user, "generated_password": password}
+
+
+@router.get("/users", response_model=List[schemas.UserOut])
+async def list_users(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
+    users = db.query(models.User).all()
+    return users
+
+
+@router.post("/users/{user_id}/reset-password")
+async def reset_user_password(user_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Generate a new temporary password
+    alphabet = string.ascii_letters + string.digits
+    new_password = ''.join(secrets.choice(alphabet) for i in range(10))
+    user.hashed_password = auth.get_password_hash(new_password)
+    db.add(user)
+    db.commit()
+    return {"user_id": user.id, "email": user.email, "new_password": new_password}

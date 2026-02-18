@@ -138,9 +138,7 @@ Run: `pip install -r requirements.txt`
 
 The database has been recreated with the new schema.
 - All old lead data has been removed
-- Admin user has been recreated:
-  - Email: admin@inno.com
-  - Password: admin!nno
+ - Admin user: create securely (see below)
 
 ## API Usage Examples
 
@@ -174,8 +172,28 @@ curl -X PUT "http://localhost:8000/api/leads/123" \
    ```
 
 2. Test the login with:
-   - Email: admin@inno.com
-   - Password: admin!nno
+  - Create the admin user first. Do NOT store plaintext credentials in source.
+
+    Option A — seed via script (recommended):
+
+    Set environment variables and run the seeder from the `backend` folder:
+
+    ```powershell
+    $env:ADMIN_EMAIL='admin@yourdomain.com'
+    $env:ADMIN_PASSWORD='StrongP@ssw0rd'
+    python seed_db.py
+    ```
+
+    Option B — SQL insert (advanced):
+
+    Hash the password using the application's `auth.get_password_hash()` helper, then run an INSERT like:
+
+    ```sql
+    INSERT INTO users (email, hashed_password, first_name, last_name, role, is_active)
+    VALUES ('admin@yourdomain.com', '<BCRYPT_HASH_HERE>', 'Super', 'Admin', 'admin', 1);
+    ```
+
+    Replace `<BCRYPT_HASH_HERE>` with a bcrypt hash produced by the app or other trusted tool.
 
 3. Upload your Excel file through the frontend or API
 

@@ -72,9 +72,11 @@ class LeadUpdate(BaseModel):
     sic_code: Optional[str] = None
     industry: Optional[str] = None
     recording: Optional[str] = None
+    is_submitted: Optional[bool] = None
 
 class LeadOut(LeadBase):
     id: int
+    is_submitted: bool
     created_at: datetime
     updated_at: datetime
 
