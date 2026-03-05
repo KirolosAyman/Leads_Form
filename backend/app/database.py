@@ -4,9 +4,13 @@ from sqlalchemy.orm import sessionmaker
 import os
 
 # Use absolute path to ensure DB is always found
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "leads_platform.db")
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
+#BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+#DB_PATH = os.path.join(BASE_DIR, "leads_platform.db")
+#SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
+
+# MariaDB connection (replace with your details)
+SQLALCHEMY_DATABASE_URL = "mysql+pymysql://fastapi_user:!nno-adminDB@localhost/webapp_db"
+
 
 print(f"Database URL: {SQLALCHEMY_DATABASE_URL}")
 
