@@ -32,7 +32,7 @@ const AdminDashboard = () => {
         formData.append('file', file);
 
         try {
-            const res = await api.post('/api/leads/upload', formData, {
+            const res = await api.post('/leads/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             setUploadStatus({ type: 'success', data: res.data });
@@ -44,7 +44,7 @@ const AdminDashboard = () => {
     const handleCreateUser = async (e) => {
         e.preventDefault();
         try {
-            const res = await api.post('/api/users/agent/with-password', newUser);
+            const res = await api.post('/users/agent/with-password', newUser);
             setCreatedUser(res.data);
             setNewUser({ first_name: '', last_name: '', email: '' }); // Reset form
             // Refresh agents list if visible
@@ -57,7 +57,7 @@ const AdminDashboard = () => {
     const fetchAgents = async () => {
         setLoadingAgents(true);
         try {
-            const res = await api.get('/api/users');
+            const res = await api.get('/users');
             setAgents(res.data || []);
         } catch (err) {
             alert('Failed to load agents');
@@ -69,7 +69,7 @@ const AdminDashboard = () => {
     const resetPassword = async (userId) => {
         if (!window.confirm('Generate a new password for this user?')) return;
         try {
-            const res = await api.post(`/api/users/${userId}/reset-password`);
+            const res = await api.post(`/users/${userId}/reset-password`);
             alert(`New password for ${res.data.email}: ${res.data.new_password}`);
             // refresh agents list
             fetchAgents();
@@ -81,7 +81,7 @@ const AdminDashboard = () => {
     const fetchLeads = async () => {
         setLoadingLeads(true);
         try {
-            const res = await api.get('/api/leads');
+            const res = await api.get('/leads');
             setLeads(res.data || []);
             setSelectedLeads(new Set());
         } catch (err) {
@@ -93,7 +93,7 @@ const AdminDashboard = () => {
 
     const exportLeads = async (format) => {
         try {
-            const res = await api.get(`/api/leads/export?format=${format}`, { responseType: 'blob' });
+            const res = await api.get(`/leads/export?format=${format}`, { responseType: 'blob' });
             const url = window.URL.createObjectURL(new Blob([res.data]));
             const link = document.createElement('a');
             link.href = url;
@@ -109,7 +109,7 @@ const AdminDashboard = () => {
     const fetchSubmissions = async () => {
         setLoadingSubmissions(true);
         try {
-            const res = await api.get('/api/leads/submissions');
+            const res = await api.get('/leads/submissions');
             setSubmissions(res.data || []);
         } catch (err) {
             alert('Failed to load submissions');
@@ -120,7 +120,7 @@ const AdminDashboard = () => {
 
     const exportSubmissions = async (format) => {
         try {
-            const res = await api.get(`/api/leads/submissions/export?format=${format}`, { responseType: 'blob' });
+            const res = await api.get(`/leads/submissions/export?format=${format}`, { responseType: 'blob' });
             const url = window.URL.createObjectURL(new Blob([res.data]));
             const link = document.createElement('a');
             link.href = url;
@@ -144,7 +144,7 @@ const AdminDashboard = () => {
         if (!window.confirm(`Delete ${selectedLeads.size} selected leads? This cannot be undone.`)) return;
         try {
             const ids = Array.from(selectedLeads);
-            const res = await api.post('/api/leads/delete', { ids });
+            const res = await api.post('/leads/delete', { ids });
             alert(`Deleted ${res.data.deleted} leads.`);
             fetchLeads();
         } catch (err) {

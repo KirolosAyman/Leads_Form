@@ -12,7 +12,7 @@ export const AuthProvider = ({ children }) => {
             const token = localStorage.getItem('token');
             if (token) {
                 try {
-                    const response = await api.get('/api/users/me');
+                    const response = await api.get('/users/me');
                     setUser(response.data);
                 } catch (error) {
                     console.error("Auth check failed", error);
@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('token', access_token);
 
         // Get user details immediately
-        const userResponse = await api.get('/api/users/me');
+        const userResponse = await api.get('/users/me');
         setUser(userResponse.data);
         return userResponse.data;
     };

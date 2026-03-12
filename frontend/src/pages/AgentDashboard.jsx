@@ -16,7 +16,7 @@ const AgentDashboard = () => {
         setLead(null);
         setIsEditing(false);
         try {
-            const res = await api.get(`/api/leads/search/${searchPhone}`);
+            const res = await api.get(`/leads/search/${searchPhone}`);
             setLead(res.data);
             setEditForm(res.data);
         } catch (err) {
@@ -26,7 +26,7 @@ const AgentDashboard = () => {
 
     const handleUpdate = async () => {
         try {
-            const res = await api.put(`/api/leads/${lead.id}`, editForm);
+            const res = await api.put(`/leads/${lead.id}`, editForm);
             setLead(res.data);
             setIsEditing(false);
             alert('Lead updated successfully!');
@@ -38,7 +38,7 @@ const AgentDashboard = () => {
     const handleSubmit = async () => {
         try {
             setIsSubmitting(true);
-            const res = await api.post(`/api/leads/${lead.id}/submit`);
+            const res = await api.post(`/leads/${lead.id}/submit`);
             setLead(res.data);
             alert(`Lead ${res.data.is_submitted ? 'submitted' : 'unlocked'} successfully!`);
         } catch (err) {
