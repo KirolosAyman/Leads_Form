@@ -185,7 +185,7 @@ const AdminDashboard = () => {
                         onClick={() => { setActiveTab('submissions'); fetchSubmissions(); }}
                         className={activeTab === 'submissions' ? 'btn-primary' : 'btn-secondary'}
                     >
-                        Submissions
+                        Submissions Report
                     </button>
                 </div>
             </header>
