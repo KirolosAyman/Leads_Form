@@ -233,18 +233,12 @@ const AdminDashboard = () => {
                             {/* Debug info when nothing was processed */}
                             {uploadStatus.data.success_count === 0 && (uploadStatus.data.columns || uploadStatus.data.sample_rows) && (
                                 <div style={{ marginTop: '1rem' }}>
-                                    <strong>Debug:</strong>
-                                    {uploadStatus.data.columns && (
-                                        <div style={{ marginTop: '0.5rem' }}>
-                                            <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>Columns detected:</div>
-                                            <div style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>{uploadStatus.data.columns.join(', ')}</div>
-                                        </div>
+                                    {uploadStatus.data.success_count > 0 && (
+                                        <div>{uploadStatus.data.success_count} records uploaded successfully.</div>
                                     )}
-                                    {uploadStatus.data.sample_rows && uploadStatus.data.sample_rows.length > 0 && (
-                                        <div style={{ marginTop: '0.5rem' }}>
-                                            <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>Sample rows:</div>
-                                            <pre style={{ background: 'rgba(0,0,0,0.04)', padding: '0.5rem', borderRadius: '6px' }}>{JSON.stringify(uploadStatus.data.sample_rows, null, 2)}</pre>
-                                        </div>
+
+                                    {uploadStatus.data.existing_count > 0 && (
+                                        <div>{uploadStatus.data.existing_count} records already exist.</div>
                                     )}
                                 </div>
                             )}
