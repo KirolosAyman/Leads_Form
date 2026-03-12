@@ -189,5 +189,4 @@ body {
     border-radius: 12px;
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
-    margin: 0 auto;
 }
