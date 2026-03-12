@@ -144,7 +144,7 @@ body {
 
 /* Compact table for full-screen display */
 .table-compact {
-    font-size: 0.85rem;
+    font-size: 0.92rem;
     width: 100%;
     border-collapse: collapse;
 }
@@ -156,7 +156,7 @@ body {
 
 .table-compact th,
 .table-compact td {
-    padding: 8px 10px;
+    padding: 14px 16px;
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
@@ -179,13 +179,12 @@ body {
 .full-screen-container {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 300px);
-    padding: 2rem;
+    height: auto;
+    padding: 3rem;
 }
 
 .table-wrapper {
-    flex: 1;
-    overflow-y: auto;
+    overflow: visible;
     border: 1px solid var(--glass-border);
     border-radius: 12px;
     background: var(--glass-bg);
