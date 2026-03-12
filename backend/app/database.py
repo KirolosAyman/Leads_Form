@@ -15,7 +15,7 @@ SQLALCHEMY_DATABASE_URL = "mysql+pymysql://fastapi_user:!nno-adminDB@localhost/w
 print(f"Database URL: {SQLALCHEMY_DATABASE_URL}")
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

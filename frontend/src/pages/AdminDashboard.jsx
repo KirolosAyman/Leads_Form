@@ -230,16 +230,21 @@ const AdminDashboard = () => {
                                 </div>
                             )}
 
-                            {/* Debug info when nothing was processed */}
-                            {uploadStatus.data.success_count === 0 && (uploadStatus.data.columns || uploadStatus.data.sample_rows) && (
+                            {uploadStatus.data.success_count > 0 && (
                                 <div style={{ marginTop: '1rem' }}>
-                                    {uploadStatus.data.success_count > 0 && (
-                                        <div>{uploadStatus.data.success_count} records uploaded successfully.</div>
-                                    )}
+                                    <div>{uploadStatus.data.success_count} records added successfully.</div>
+                                </div>
+                            )}
 
-                                    {uploadStatus.data.existing_count > 0 && (
-                                        <div>{uploadStatus.data.existing_count} records already exist.</div>
-                                    )}
+                            {uploadStatus.data.duplicate_count > 0 && (
+                                <div style={{ marginTop: '1rem', color: 'hsl(var(--error))' }}>
+                                    <div>{uploadStatus.data.duplicate_count} records already exist.</div>
+                                </div>
+                            )}
+
+                            {uploadStatus.data.error_count > 0 && (
+                                <div style={{ marginTop: '1rem', color: 'hsl(var(--error))' }}>
+                                    <div>{uploadStatus.data.error_count} records had errors (see Errors section above).</div>
                                 </div>
                             )}
                         </div>
@@ -319,21 +324,18 @@ const AdminDashboard = () => {
             )}
 
             {activeTab === 'leads' && (
-                <div className="glass-panel" style={{ padding: '2rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 300px)', padding: '2rem', gap: '1rem' }}>
                     <h2>Leads</h2>
-                    <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ marginBottom: '0rem' }}>
                         <button className="btn-primary" onClick={() => exportLeads('csv')}>Export CSV</button>
                         <button className="btn-secondary" style={{ marginLeft: '0.5rem' }} onClick={() => exportLeads('xlsx')}>Export Excel</button>
+                        <button className="btn-primary" style={{ marginLeft: '1rem' }} onClick={() => fetchLeads()}>Refresh</button>
+                        <button className="btn-secondary" style={{ marginLeft: '0.5rem' }} onClick={deleteSelectedLeads}>Delete Selected</button>
                     </div>
 
                     {loadingLeads ? <p>Loading...</p> : (
-                        <div>
-                            <div style={{ marginBottom: '0.5rem' }}>
-                                <button className="btn-primary" onClick={() => fetchLeads()}>Refresh</button>
-                                <button className="btn-secondary" style={{ marginLeft: '0.5rem' }} onClick={deleteSelectedLeads}>Delete Selected</button>
-                            </div>
-                            <div style={{ overflowX: 'auto', maxHeight: '60vh' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+                        <div className="table-wrapper">
+                            <table className="table-compact">
                                     <thead>
                                         <tr>
                                             <th></th>
@@ -375,7 +377,6 @@ const AdminDashboard = () => {
                                         ))}
                                     </tbody>
                                 </table>
-                            </div>
                         </div>
                     )}
                 </div>

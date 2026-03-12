@@ -117,9 +117,13 @@ async def upload_leads(
     if errors:
         response["errors"] = errors[:20]
     # If nothing was processed, return some debug info to help identify column/name mismatches
+
     if success_count == 0 and os.getenv("DEBUG", False):
         response["columns"] = list(df.columns)
         response["sample_rows"] = df.head(3).to_dict(orient="records")
+
+    #if success_count == 0:
+        #response["columns"] = list(df.columns)
         # include up to 3 sample rows
         #try:
         #    response["sample_rows"] = df.head(3).to_dict(orient="records")
