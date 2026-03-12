@@ -324,7 +324,7 @@ const AdminDashboard = () => {
             )}
 
             {activeTab === 'leads' && (
-                <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', padding: '3rem', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', paddingTop: '3rem', paddingBottom: '3rem', paddingRight: '3rem', paddingLeft: '0', gap: '1rem', alignItems: 'flex-start' }}>
                     <h2>Leads</h2>
                     <div style={{ marginBottom: '0rem' }}>
                         <button className="btn-primary" onClick={() => exportLeads('csv')}>Export CSV</button>
