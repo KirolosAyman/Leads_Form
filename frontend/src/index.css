@@ -144,19 +144,22 @@ body {
 
 /* Compact table for full-screen display */
 .table-compact {
-    font-size: 0.92rem;
+    font-size: 0.85rem;
     width: 100%;
     border-collapse: collapse;
+    min-width: 1400px;
 }
 
 .table-compact thead tr {
-    background: rgba(255, 255, 255, 0.05);
-    border-bottom: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.08);
+    border-bottom: 2px solid var(--glass-border);
+    position: sticky;
+    top: 0;
 }
 
 .table-compact th,
 .table-compact td {
-    padding: 14px 16px;
+    padding: 10px 12px;
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
@@ -164,7 +167,7 @@ body {
 }
 
 .table-compact th {
-    font-weight: 600;
+    font-weight: 700;
     color: hsl(var(--secondary));
 }
 
@@ -173,7 +176,8 @@ body {
 }
 
 .table-compact tbody tr:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.08);
+    transition: background 0.2s ease;
 }
 
 .full-screen-container {
@@ -184,9 +188,10 @@ body {
 }
 
 .table-wrapper {
-    overflow: visible;
+    overflow-x: auto;
     border: 1px solid var(--glass-border);
     border-radius: 12px;
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
+    margin: 1rem 0;
 }

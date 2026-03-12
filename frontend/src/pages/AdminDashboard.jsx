@@ -185,7 +185,7 @@ const AdminDashboard = () => {
                         onClick={() => { setActiveTab('submissions'); fetchSubmissions(); }}
                         className={activeTab === 'submissions' ? 'btn-primary' : 'btn-secondary'}
                     >
-                        Submissions Report
+                        Submissions Reports
                     </button>
                 </div>
             </header>
@@ -324,7 +324,7 @@ const AdminDashboard = () => {
             )}
 
             {activeTab === 'leads' && (
-                <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', paddingTop: '3rem', paddingBottom: '3rem', paddingRight: '3rem', paddingLeft: '0', gap: '1rem', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', paddingTop: '2rem', paddingBottom: '2rem', paddingRight: '2rem', paddingLeft: '2rem', gap: '1rem', alignItems: 'stretch' }}>
                     <h2>Leads</h2>
                     <div style={{ marginBottom: '0rem' }}>
                         <button className="btn-primary" onClick={() => exportLeads('csv')}>Export CSV</button>
