@@ -317,66 +317,66 @@ const AdminDashboard = () => {
 
                     <form onSubmit={handleCreateUser}>
                         <div className="mb-4">
-                            <input 
-                                className="glass-input" 
-                                placeholder="First Name" 
-                                value={newUser.first_name} 
-                                onChange={e => setNewUser({ ...newUser, first_name: e.target.value })} 
-                                required 
+                            <input
+                                className="glass-input"
+                                placeholder="First Name"
+                                value={newUser.first_name}
+                                onChange={e => setNewUser({ ...newUser, first_name: e.target.value })}
+                                required
                             />
                         </div>
                         <div className="mb-4">
-                            <input 
-                                className="glass-input" 
-                                placeholder="Last Name" 
-                                value={newUser.last_name} 
-                                onChange={e => setNewUser({ ...newUser, last_name: e.target.value })} 
-                                required 
+                            <input
+                                className="glass-input"
+                                placeholder="Last Name"
+                                value={newUser.last_name}
+                                onChange={e => setNewUser({ ...newUser, last_name: e.target.value })}
+                                required
                             />
                         </div>
                         <div className="mb-4">
-                            <input 
-                                type="email" 
-                                className="glass-input" 
-                                placeholder="Email" 
-                                value={newUser.email} 
-                                onChange={e => setNewUser({ ...newUser, email: e.target.value })} 
-                                required 
+                            <input
+                                type="email"
+                                className="glass-input"
+                                placeholder="Email"
+                                value={newUser.email}
+                                onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                                required
                             />
                         </div>
-                        
+
                         <div className="mb-4">
                             <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.95rem' }}>Password Option:</label>
                             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                                    <input 
-                                        type="radio" 
-                                        name="password-mode" 
-                                        value="generate" 
+                                    <input
+                                        type="radio"
+                                        name="password-mode"
+                                        value="generate"
                                         checked={passwordMode === 'generate'}
                                         onChange={() => setPasswordMode('generate')}
                                     />
                                     Generate Password
                                 </label>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                                    <input 
-                                        type="radio" 
-                                        name="password-mode" 
-                                        value="manual" 
+                                    <input
+                                        type="radio"
+                                        name="password-mode"
+                                        value="manual"
                                         checked={passwordMode === 'manual'}
                                         onChange={() => setPasswordMode('manual')}
                                     />
                                     Enter Password
                                 </label>
                             </div>
-                            
+
                             {passwordMode === 'manual' && (
-                                <input 
-                                    type="password" 
-                                    className="glass-input" 
-                                    placeholder="Enter password" 
-                                    value={newUser.password} 
-                                    onChange={e => setNewUser({ ...newUser, password: e.target.value })} 
+                                <input
+                                    type="password"
+                                    className="glass-input"
+                                    placeholder="Enter password"
+                                    value={newUser.password}
+                                    onChange={e => setNewUser({ ...newUser, password: e.target.value })}
                                     required={passwordMode === 'manual'}
                                 />
                             )}
@@ -429,15 +429,15 @@ const AdminDashboard = () => {
                                                 <td style={{ padding: '0.75rem' }}>{a.role}</td>
                                                 <td style={{ padding: '0.75rem' }}>{new Date(a.created_at).toLocaleString()}</td>
                                                 <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                                                    <button 
-                                                        className="btn-secondary" 
+                                                    <button
+                                                        className="btn-secondary"
                                                         onClick={() => openResetPasswordModal(a)}
                                                         style={{ marginRight: '0.5rem' }}
                                                     >
                                                         Reset Password
                                                     </button>
-                                                    <button 
-                                                        className="btn-secondary" 
+                                                    <button
+                                                        className="btn-secondary"
                                                         onClick={() => deleteAgent(a.id, a.email)}
                                                         style={{ color: 'hsl(var(--error))', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
                                                     >
@@ -479,52 +479,52 @@ const AdminDashboard = () => {
                         {!resetPasswordResult ? (
                             <>
                                 <h3 style={{ marginBottom: '1rem' }}>Reset Password for {resetPasswordModal.user.email}</h3>
-                                
+
                                 <div style={{ marginBottom: '1.5rem' }}>
                                     <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.95rem' }}>Password Option:</label>
                                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                                            <input 
-                                                type="radio" 
-                                                name="reset-password-mode" 
-                                                value="generate" 
+                                            <input
+                                                type="radio"
+                                                name="reset-password-mode"
+                                                value="generate"
                                                 checked={resetPasswordMode === 'generate'}
                                                 onChange={() => setResetPasswordMode('generate')}
                                             />
                                             Generate Password
                                         </label>
                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                                            <input 
-                                                type="radio" 
-                                                name="reset-password-mode" 
-                                                value="manual" 
+                                            <input
+                                                type="radio"
+                                                name="reset-password-mode"
+                                                value="manual"
                                                 checked={resetPasswordMode === 'manual'}
                                                 onChange={() => setResetPasswordMode('manual')}
                                             />
                                             Enter Password
                                         </label>
                                     </div>
-                                    
+
                                     {resetPasswordMode === 'manual' && (
-                                        <input 
-                                            type="password" 
-                                            className="glass-input" 
-                                            placeholder="Enter new password" 
-                                            value={resetPasswordInput} 
+                                        <input
+                                            type="password"
+                                            className="glass-input"
+                                            placeholder="Enter new password"
+                                            value={resetPasswordInput}
                                             onChange={e => setResetPasswordInput(e.target.value)}
                                         />
                                     )}
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                                    <button 
-                                        className="btn-secondary" 
+                                    <button
+                                        className="btn-secondary"
                                         onClick={closeResetPasswordModal}
                                     >
                                         Cancel
                                     </button>
-                                    <button 
-                                        className="btn-primary" 
+                                    <button
+                                        className="btn-primary"
                                         onClick={handleResetPassword}
                                     >
                                         Reset Password
@@ -540,8 +540,8 @@ const AdminDashboard = () => {
                                     <AlertCircle size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
                                     Save this password immediately. It will not be shown again.
                                 </p>
-                                <button 
-                                    className="btn-primary w-full" 
+                                <button
+                                    className="btn-primary w-full"
                                     onClick={closeResetPasswordModal}
                                     style={{ marginTop: '1.5rem' }}
                                 >
@@ -566,47 +566,47 @@ const AdminDashboard = () => {
                     {loadingLeads ? <p>Loading...</p> : (
                         <div className="table-wrapper">
                             <table className="table-compact">
-                                    <thead>
-                                        <tr>
-                                            <th></th>
-                                            <th>ID</th>
-                                            <th>Contact ID</th>
-                                            <th>Name</th>
-                                            <th>Phone</th>
-                                            <th>Company</th>
-                                            <th>Title</th>
-                                            <th>Street</th>
-                                            <th>City</th>
-                                            <th>State</th>
-                                            <th>ZIP</th>
-                                            <th>SIC</th>
-                                            <th>Recording</th>
-                                            <th>Submitted</th>
-                                            <th>Created</th>
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>ID</th>
+                                        <th>Contact ID</th>
+                                        <th>Name</th>
+                                        <th>Phone</th>
+                                        <th>Company</th>
+                                        <th>Title</th>
+                                        <th>Street</th>
+                                        <th>City</th>
+                                        <th>State</th>
+                                        <th>ZIP</th>
+                                        <th>SIC</th>
+                                        <th>Recording</th>
+                                        <th>Submitted</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {leads.map(l => (
+                                        <tr key={l.id}>
+                                            <td style={{ textAlign: 'center' }}><input type="checkbox" checked={selectedLeads.has(l.id)} onChange={() => toggleSelectLead(l.id)} /></td>
+                                            <td>{l.id}</td>
+                                            <td>{l.contact_id}</td>
+                                            <td>{l.first_name} {l.last_name}</td>
+                                            <td>{l.phone}</td>
+                                            <td>{l.company}</td>
+                                            <td>{l.title}</td>
+                                            <td>{l.street}</td>
+                                            <td>{l.city}</td>
+                                            <td>{l.state}</td>
+                                            <td>{l.zip}</td>
+                                            <td>{l.sic_code}</td>
+                                            <td>{l.recording}</td>
+                                            <td>{l.is_submitted ? 'Yes' : 'No'}</td>
+                                            <td>{new Date(l.created_at).toLocaleString()}</td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        {leads.map(l => (
-                                            <tr key={l.id}>
-                                                <td style={{ textAlign: 'center' }}><input type="checkbox" checked={selectedLeads.has(l.id)} onChange={() => toggleSelectLead(l.id)} /></td>
-                                                <td>{l.id}</td>
-                                                <td>{l.contact_id}</td>
-                                                <td>{l.first_name} {l.last_name}</td>
-                                                <td>{l.phone}</td>
-                                                <td>{l.company}</td>
-                                                <td>{l.title}</td>
-                                                <td>{l.street}</td>
-                                                <td>{l.city}</td>
-                                                <td>{l.state}</td>
-                                                <td>{l.zip}</td>
-                                                <td>{l.sic_code}</td>
-                                                <td>{l.recording}</td>
-                                                <td>{l.is_submitted ? 'Yes' : 'No'}</td>
-                                                <td>{new Date(l.created_at).toLocaleString()}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>
@@ -630,7 +630,8 @@ const AdminDashboard = () => {
                                         <th>Lead ID</th>
                                         <th>Lead Contact</th>
                                         <th>Lead Phone</th>
-                                        <th>Submitted By</th>
+                                        <th>Agent Name</th>
+                                        <th>Agent Email</th>
                                         <th>Submitted At</th>
                                     </tr>
                                 </thead>
@@ -640,8 +641,9 @@ const AdminDashboard = () => {
                                             <td>{s.id}</td>
                                             <td>{s.lead_id}</td>
                                             <td>{s.details?.contact_id}</td>
-                                            <td>{s.details?.phone}</td>
-                                            <td>{s.details?.submitted_by?.email}</td>
+                                            <td>{s.details?.phone1 || s.details?.phone || '—'}</td>
+                                            <td>{s.details?.agent_name || (s.details?.submitted_by ? `${s.details.submitted_by.first_name} ${s.details.submitted_by.last_name}` : '—')}</td>
+                                            <td>{s.details?.submitted_by?.email || '—'}</td>
                                             <td>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : ''}</td>
                                         </tr>
                                     ))}
