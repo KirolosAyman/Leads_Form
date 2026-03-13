@@ -469,7 +469,7 @@ const AdminDashboard = () => {
                     zIndex: 1000
                 }}>
                     <div style={{
-                        background: 'var(--bg-secondary)',
+                        background: '#0a0a15',
                         padding: '2rem',
                         borderRadius: '12px',
                         maxWidth: '500px',
