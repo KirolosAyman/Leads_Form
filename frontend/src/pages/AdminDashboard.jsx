@@ -613,25 +613,29 @@ const AdminDashboard = () => {
             )}
 
             {activeTab === 'submissions' && (
-                <div className="glass-panel" style={{ padding: '2rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', paddingTop: '2rem', paddingBottom: '2rem', paddingRight: '2rem', paddingLeft: '2rem', gap: '1rem' }}>
                     <h2>Submissions</h2>
-                    <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ marginBottom: '0rem' }}>
                         <button className="btn-primary" onClick={() => fetchSubmissions()}>Refresh</button>
                         <button className="btn-secondary" style={{ marginLeft: '0.5rem' }} onClick={() => exportSubmissions('csv')}>Export CSV</button>
                         <button className="btn-secondary" style={{ marginLeft: '0.5rem' }} onClick={() => exportSubmissions('xlsx')}>Export Excel</button>
                     </div>
 
                     {loadingSubmissions ? <p>Loading...</p> : (
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1000 }}>
+                        <div className="table-wrapper">
+                            <table className="table-compact">
                                 <thead>
                                     <tr>
                                         <th>ID</th>
                                         <th>Lead ID</th>
-                                        <th>Lead Contact</th>
+                                        <th>Contact ID</th>
                                         <th>Lead Phone</th>
+                                        <th>First Name</th>
+                                        <th>Last Name</th>
+                                        <th>Company</th>
                                         <th>Agent Name</th>
                                         <th>Agent Email</th>
+                                        <th>Disposition</th>
                                         <th>Submitted At</th>
                                     </tr>
                                 </thead>
@@ -640,10 +644,14 @@ const AdminDashboard = () => {
                                         <tr key={s.id}>
                                             <td>{s.id}</td>
                                             <td>{s.lead_id}</td>
-                                            <td>{s.details?.contact_id}</td>
+                                            <td>{s.details?.contact_id || '—'}</td>
                                             <td>{s.details?.phone1 || s.details?.phone || '—'}</td>
+                                            <td>{s.details?.first_name || '—'}</td>
+                                            <td>{s.details?.last_name || '—'}</td>
+                                            <td>{s.details?.company || '—'}</td>
                                             <td>{s.details?.agent_name || (s.details?.submitted_by ? `${s.details.submitted_by.first_name} ${s.details.submitted_by.last_name}` : '—')}</td>
                                             <td>{s.details?.submitted_by?.email || '—'}</td>
+                                            <td>{s.details?.disposition || '—'}</td>
                                             <td>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : ''}</td>
                                         </tr>
                                     ))}
