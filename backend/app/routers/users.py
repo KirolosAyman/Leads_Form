@@ -31,19 +31,19 @@ async def create_agent(
 
 @router.post("/users/agent/with-password")
 async def create_agent_with_password_return(
-    user: schemas.UserCreate, 
+    user: schemas.UserCreateWithPassword, 
     db: Session = Depends(database.get_db), 
     current_user: models.User = Depends(auth.require_admin)
 ):
     """
-    Creates an agent and returns the generated password. 
-    Use this endpoint to see the password for distribution.
+    Creates an agent and returns the generated or provided password. 
+    If password is not provided, it will be auto-generated.
     """
     db_user = crud.get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    new_user, password = crud.create_user(db=db, user=user, role=models.UserRole.AGENT)
+    new_user, password = crud.create_user_with_optional_password(db=db, user=user, role=models.UserRole.AGENT)
     return {"user": new_user, "generated_password": password}
 
 
@@ -54,15 +54,52 @@ async def list_users(db: Session = Depends(database.get_db), current_user: model
 
 
 @router.post("/users/{user_id}/reset-password")
-async def reset_user_password(user_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
+async def reset_user_password(
+    user_id: int, 
+    reset_request: schemas.ResetPasswordRequest,
+    db: Session = Depends(database.get_db), 
+    current_user: models.User = Depends(auth.require_admin)
+):
+    """
+    Reset a user's password with optional custom password.
+    Cannot reset password for admin accounts.
+    """
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent resetting admin passwords
+    if user.role == models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Cannot reset password for admin accounts")
 
-    # Generate a new temporary password
-    alphabet = string.ascii_letters + string.digits
-    new_password = ''.join(secrets.choice(alphabet) for i in range(10))
+    # Generate or use provided password
+    if reset_request.password:
+        new_password = reset_request.password
+    else:
+        alphabet = string.ascii_letters + string.digits
+        new_password = ''.join(secrets.choice(alphabet) for i in range(10))
+    
     user.hashed_password = auth.get_password_hash(new_password)
     db.add(user)
     db.commit()
     return {"user_id": user.id, "email": user.email, "new_password": new_password}
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.require_admin)
+):
+    """Delete an agent account. Cannot delete admin accounts."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent deleting admin accounts
+    if user.role == models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Cannot delete admin accounts")
+    
+    db.delete(user)
+    db.commit()
+    return {"message": f"User {user.email} deleted successfully", "user_id": user.id}

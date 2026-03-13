@@ -21,6 +21,10 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     pass # Password is auto-generated or passed by admin
 
+class UserCreateWithPassword(UserBase):
+    """Create user with optional custom password"""
+    password: Optional[str] = None  # If None, auto-generate
+
 class UserLogin(BaseModel):
     username: str # OAuth2PasswordRequestForm uses 'username' for email
     password: str
@@ -33,6 +37,10 @@ class UserOut(UserBase):
 
     class Config:
         from_attributes = True
+
+class ResetPasswordRequest(BaseModel):
+    """Reset password with optional custom password"""
+    password: Optional[str] = None  # If None, auto-generate
 
 # Leads
 class LeadBase(BaseModel):

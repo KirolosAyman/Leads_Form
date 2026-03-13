@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import api from '../api';
-import { Upload, UserPlus, CheckCircle, AlertCircle, FileText } from 'lucide-react';
+import { Upload, UserPlus, CheckCircle, AlertCircle, FileText, Trash2 } from 'lucide-react';
 
 const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('upload'); // 'upload', 'users', 'agents', 'leads'
@@ -10,7 +10,8 @@ const AdminDashboard = () => {
     const [uploadStatus, setUploadStatus] = useState(null);
 
     // User Creation State
-    const [newUser, setNewUser] = useState({ first_name: '', last_name: '', email: '' });
+    const [newUser, setNewUser] = useState({ first_name: '', last_name: '', email: '', password: '' });
+    const [passwordMode, setPasswordMode] = useState('generate'); // 'generate' or 'manual'
     const [createdUser, setCreatedUser] = useState(null);
     const [agents, setAgents] = useState([]);
     const [leads, setLeads] = useState([]);
@@ -19,6 +20,12 @@ const AdminDashboard = () => {
     const [selectedLeads, setSelectedLeads] = useState(new Set());
     const [submissions, setSubmissions] = useState([]);
     const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+
+    // Reset Password State
+    const [resetPasswordModal, setResetPasswordModal] = useState(null); // { userId, user } or null
+    const [resetPasswordMode, setResetPasswordMode] = useState('generate');
+    const [resetPasswordInput, setResetPasswordInput] = useState('');
+    const [resetPasswordResult, setResetPasswordResult] = useState(null);
 
     const handleFileChange = (e) => {
         setFile(e.target.files[0]);
@@ -44,9 +51,16 @@ const AdminDashboard = () => {
     const handleCreateUser = async (e) => {
         e.preventDefault();
         try {
-            const res = await api.post('/users/agent/with-password', newUser);
+            const payload = {
+                first_name: newUser.first_name,
+                last_name: newUser.last_name,
+                email: newUser.email,
+                password: passwordMode === 'manual' ? newUser.password : null
+            };
+            const res = await api.post('/users/agent/with-password', payload);
             setCreatedUser(res.data);
-            setNewUser({ first_name: '', last_name: '', email: '' }); // Reset form
+            setNewUser({ first_name: '', last_name: '', email: '', password: '' });
+            setPasswordMode('generate');
             // Refresh agents list if visible
             if (activeTab === 'agents') fetchAgents();
         } catch (err) {
@@ -66,15 +80,47 @@ const AdminDashboard = () => {
         }
     };
 
-    const resetPassword = async (userId) => {
-        if (!window.confirm('Generate a new password for this user?')) return;
+    const openResetPasswordModal = (agent) => {
+        setResetPasswordModal({ userId: agent.id, user: agent });
+        setResetPasswordMode('generate');
+        setResetPasswordInput('');
+        setResetPasswordResult(null);
+    };
+
+    const handleResetPassword = async () => {
+        if (!resetPasswordModal) return;
+        if (resetPasswordMode === 'manual' && !resetPasswordInput) {
+            alert('Please enter a password');
+            return;
+        }
+
         try {
-            const res = await api.post(`/users/${userId}/reset-password`);
-            alert(`New password for ${res.data.email}: ${res.data.new_password}`);
-            // refresh agents list
+            const payload = {
+                password: resetPasswordMode === 'manual' ? resetPasswordInput : null
+            };
+            const res = await api.post(`/users/${resetPasswordModal.userId}/reset-password`, payload);
+            setResetPasswordResult(res.data);
             fetchAgents();
         } catch (err) {
-            alert('Failed to reset password');
+            alert(err.response?.data?.detail || 'Failed to reset password');
+            setResetPasswordModal(null);
+        }
+    };
+
+    const closeResetPasswordModal = () => {
+        setResetPasswordModal(null);
+        setResetPasswordInput('');
+        setResetPasswordResult(null);
+    };
+
+    const deleteAgent = async (agentId, agentEmail) => {
+        if (!window.confirm(`Delete agent ${agentEmail}? This cannot be undone.`)) return;
+        try {
+            await api.delete(`/users/${agentId}`);
+            alert(`Agent ${agentEmail} deleted successfully`);
+            fetchAgents();
+        } catch (err) {
+            alert(err.response?.data?.detail || 'Failed to delete agent');
         }
     };
 
@@ -151,6 +197,9 @@ const AdminDashboard = () => {
             alert('Failed to delete leads');
         }
     };
+
+    // Filter out admin accounts
+    const agentsList = agents.filter(a => a.role !== 'admin');
 
     return (
         <div className="container fade-in">
@@ -268,14 +317,71 @@ const AdminDashboard = () => {
 
                     <form onSubmit={handleCreateUser}>
                         <div className="mb-4">
-                            <input className="glass-input" placeholder="First Name" value={newUser.first_name} onChange={e => setNewUser({ ...newUser, first_name: e.target.value })} required />
+                            <input 
+                                className="glass-input" 
+                                placeholder="First Name" 
+                                value={newUser.first_name} 
+                                onChange={e => setNewUser({ ...newUser, first_name: e.target.value })} 
+                                required 
+                            />
                         </div>
                         <div className="mb-4">
-                            <input className="glass-input" placeholder="Last Name" value={newUser.last_name} onChange={e => setNewUser({ ...newUser, last_name: e.target.value })} required />
+                            <input 
+                                className="glass-input" 
+                                placeholder="Last Name" 
+                                value={newUser.last_name} 
+                                onChange={e => setNewUser({ ...newUser, last_name: e.target.value })} 
+                                required 
+                            />
                         </div>
                         <div className="mb-4">
-                            <input type="email" className="glass-input" placeholder="Email" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} required />
+                            <input 
+                                type="email" 
+                                className="glass-input" 
+                                placeholder="Email" 
+                                value={newUser.email} 
+                                onChange={e => setNewUser({ ...newUser, email: e.target.value })} 
+                                required 
+                            />
                         </div>
+                        
+                        <div className="mb-4">
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.95rem' }}>Password Option:</label>
+                            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="password-mode" 
+                                        value="generate" 
+                                        checked={passwordMode === 'generate'}
+                                        onChange={() => setPasswordMode('generate')}
+                                    />
+                                    Generate Password
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="password-mode" 
+                                        value="manual" 
+                                        checked={passwordMode === 'manual'}
+                                        onChange={() => setPasswordMode('manual')}
+                                    />
+                                    Enter Password
+                                </label>
+                            </div>
+                            
+                            {passwordMode === 'manual' && (
+                                <input 
+                                    type="password" 
+                                    className="glass-input" 
+                                    placeholder="Enter password" 
+                                    value={newUser.password} 
+                                    onChange={e => setNewUser({ ...newUser, password: e.target.value })} 
+                                    required={passwordMode === 'manual'}
+                                />
+                            )}
+                        </div>
+
                         <button type="submit" className="btn-primary w-full">Create Agent</button>
                     </form>
 
@@ -297,29 +403,153 @@ const AdminDashboard = () => {
                 <div className="glass-panel" style={{ padding: '2rem' }}>
                     <h2>Agents</h2>
                     {loadingAgents ? <p>Loading...</p> : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Created</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {agents.map(a => (
-                                    <tr key={a.id}>
-                                        <td>{a.first_name} {a.last_name}</td>
-                                        <td>{a.email}</td>
-                                        <td>{a.role}</td>
-                                        <td>{new Date(a.created_at).toLocaleString()}</td>
-                                        <td><button className="btn-secondary" onClick={() => resetPassword(a.id)}>Reset Password</button></td>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}>Name</th>
+                                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}>Email</th>
+                                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}>Role</th>
+                                        <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}>Created</th>
+                                        <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: '1px solid var(--glass-border)' }}>Actions</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {agentsList.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="5" style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                                No agents found
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        agentsList.map(a => (
+                                            <tr key={a.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                                                <td style={{ padding: '0.75rem' }}>{a.first_name} {a.last_name}</td>
+                                                <td style={{ padding: '0.75rem' }}>{a.email}</td>
+                                                <td style={{ padding: '0.75rem' }}>{a.role}</td>
+                                                <td style={{ padding: '0.75rem' }}>{new Date(a.created_at).toLocaleString()}</td>
+                                                <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                                    <button 
+                                                        className="btn-secondary" 
+                                                        onClick={() => openResetPasswordModal(a)}
+                                                        style={{ marginRight: '0.5rem' }}
+                                                    >
+                                                        Reset Password
+                                                    </button>
+                                                    <button 
+                                                        className="btn-secondary" 
+                                                        onClick={() => deleteAgent(a.id, a.email)}
+                                                        style={{ color: 'hsl(var(--error))', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                                                    >
+                                                        <Trash2 size={16} /> Delete
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
+                </div>
+            )}
+
+            {/* Reset Password Modal */}
+            {resetPasswordModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.7)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000
+                }}>
+                    <div style={{
+                        background: 'var(--bg-secondary)',
+                        padding: '2rem',
+                        borderRadius: '12px',
+                        maxWidth: '500px',
+                        width: '90%',
+                        border: '1px solid var(--glass-border)'
+                    }}>
+                        {!resetPasswordResult ? (
+                            <>
+                                <h3 style={{ marginBottom: '1rem' }}>Reset Password for {resetPasswordModal.user.email}</h3>
+                                
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.95rem' }}>Password Option:</label>
+                                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                            <input 
+                                                type="radio" 
+                                                name="reset-password-mode" 
+                                                value="generate" 
+                                                checked={resetPasswordMode === 'generate'}
+                                                onChange={() => setResetPasswordMode('generate')}
+                                            />
+                                            Generate Password
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                            <input 
+                                                type="radio" 
+                                                name="reset-password-mode" 
+                                                value="manual" 
+                                                checked={resetPasswordMode === 'manual'}
+                                                onChange={() => setResetPasswordMode('manual')}
+                                            />
+                                            Enter Password
+                                        </label>
+                                    </div>
+                                    
+                                    {resetPasswordMode === 'manual' && (
+                                        <input 
+                                            type="password" 
+                                            className="glass-input" 
+                                            placeholder="Enter new password" 
+                                            value={resetPasswordInput} 
+                                            onChange={e => setResetPasswordInput(e.target.value)}
+                                        />
+                                    )}
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                                    <button 
+                                        className="btn-secondary" 
+                                        onClick={closeResetPasswordModal}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        className="btn-primary" 
+                                        onClick={handleResetPassword}
+                                    >
+                                        Reset Password
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <h3 style={{ color: 'hsl(var(--success))', marginBottom: '1rem' }}>Password Reset Successful!</h3>
+                                <p><strong>Email:</strong> {resetPasswordResult.email}</p>
+                                <p><strong>New Password:</strong> {resetPasswordResult.new_password}</p>
+                                <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                    <AlertCircle size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
+                                    Save this password immediately. It will not be shown again.
+                                </p>
+                                <button 
+                                    className="btn-primary w-full" 
+                                    onClick={closeResetPasswordModal}
+                                    style={{ marginTop: '1.5rem' }}
+                                >
+                                    Close
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
 
