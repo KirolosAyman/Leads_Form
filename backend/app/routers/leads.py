@@ -289,50 +289,159 @@ async def update_lead(
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
 
+
+# ---------------------------------------------------------------------------
+# External API configuration
+# Replace EXTERNAL_API_URL with the real production endpoint when ready.
+# ---------------------------------------------------------------------------
+EXTERNAL_API_URL = "https://httpbin.org/post"
+
+
 @router.post("/leads/{lead_id}/submit", response_model=schemas.LeadOut)
 async def submit_lead(
     lead_id: int,
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(auth.get_current_active_user)
 ):
-    """Toggle the submission status of a lead"""
+    """
+    Submit a lead to the external sales API.
+
+    Rules:
+    - If the lead is already submitted (by anyone), return 409 – locked for everyone.
+    - Build the form-encoded payload from the lead's current data.
+    - POST to EXTERNAL_API_URL.
+    - Only mark the lead as submitted if the API returns a 2xx status.
+    - On failure the lead stays unlocked and the error is surfaced to the agent.
+    """
+    import json
+    import requests as ext_requests
+
     lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    # Toggle
-    lead.is_submitted = not lead.is_submitted
 
-    # If being marked submitted, create a submission record
+    # ── Guard: already submitted by someone ──────────────────────────────────
     if lead.is_submitted:
-        try:
-            # create a JSON/text snapshot of relevant lead data and user info
-            snapshot = {
-                'lead_id': lead.id,
-                'contact_id': lead.contact_id,
-                'phone': lead.phone,
-                'first_name': lead.first_name,
-                'last_name': lead.last_name,
-                'company': lead.company,
-                'title': lead.title,
-                'submitted_by': {
-                    'id': current_user.id,
-                    'email': current_user.email,
-                    'first_name': current_user.first_name,
-                    'last_name': current_user.last_name,
-                }
-            }
-            import json
-            submission = models.LeadSubmission(
-                lead_id=lead.id,
-                user_id=current_user.id,
-                details=json.dumps(snapshot)
-            )
-            db.add(submission)
-        except Exception:
-            # don't block submission toggle on snapshot errors
-            pass
+        raise HTTPException(
+            status_code=409,
+            detail="This lead has already been submitted and is locked."
+        )
 
+    # ── Build the form payload ───────────────────────────────────────────────
+    agent_name = f"{current_user.first_name} {current_user.last_name}".strip()
+
+    payload = {
+        "title":          lead.title          or "",
+        "first_name":     lead.first_name     or "",
+        "last_name":      lead.last_name      or "",
+        "company":        lead.company        or "",
+        "phone1":         lead.phone          or "",
+        "street":         lead.street         or "",
+        "city":           lead.city           or "",
+        "state":          lead.state          or "",
+        "zip":            lead.zip            or "",
+        "web_site":       lead.web_site       or "",
+        "annual_sales":   lead.annual_sales   or "",
+        "employee_count": lead.employee_count or "",
+        "industry":       lead.industry       or "",
+        "sic_code":       lead.sic_code       or "",
+        "disposition":    "Warm Transfer",          # constant – never changes
+        "agent_name":     agent_name,
+    }
+
+    # ── Validate required fields before hitting the API ──────────────────────
+    required = {
+        "first_name": payload["first_name"],
+        "last_name":  payload["last_name"],
+        "company":    payload["company"],
+        "phone1":     payload["phone1"],
+        "street":     payload["street"],
+        "city":       payload["city"],
+        "state":      payload["state"],
+        "zip":        payload["zip"],
+        "agent_name": payload["agent_name"],
+    }
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Missing required fields: {', '.join(missing)}"
+        )
+
+    # ── Call the external API ────────────────────────────────────────────────
+    api_status_code = None
+    api_response_text = None
+    try:
+        resp = ext_requests.post(
+            EXTERNAL_API_URL,
+            data=payload,                                     # form-encoded
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=15,
+        )
+        api_status_code = resp.status_code
+        api_response_text = resp.text
+
+        if not resp.ok:                                       # non-2xx → fail
+            raise HTTPException(
+                status_code=502,
+                detail=f"External API returned {resp.status_code}: {resp.text[:300]}"
+            )
+
+    except HTTPException:
+        raise                                                 # re-raise our 502
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to reach the external API: {str(exc)}"
+        )
+
+    # ── API succeeded → lock the lead and record the submission ──────────────
+    lead.is_submitted = True
     db.add(lead)
-    db.commit()
+
+    # Rich snapshot stored in lead_submissions for the Submissions report
+    snapshot = {
+        "lead_id":    lead.id,
+        "contact_id": lead.contact_id,
+        "phone1":     lead.phone,
+        "first_name": lead.first_name,
+        "last_name":  lead.last_name,
+        "company":    lead.company,
+        "title":      lead.title,
+        "street":     lead.street,
+        "city":       lead.city,
+        "state":      lead.state,
+        "zip":        lead.zip,
+        "web_site":   lead.web_site,
+        "annual_sales":   lead.annual_sales,
+        "employee_count": lead.employee_count,
+        "industry":   lead.industry,
+        "sic_code":   lead.sic_code,
+        "disposition": "Warm Transfer",
+        "agent_name": agent_name,
+        "submitted_by": {
+            "id":         current_user.id,
+            "email":      current_user.email,
+            "first_name": current_user.first_name,
+            "last_name":  current_user.last_name,
+        },
+    }
+
+    submission = models.LeadSubmission(
+        lead_id=lead.id,
+        user_id=current_user.id,
+        details=json.dumps(snapshot),
+        api_status_code=api_status_code,
+        api_response=api_response_text,
+    )
+    db.add(submission)
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(exc)}")
+
     db.refresh(lead)
     return lead
+

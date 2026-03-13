@@ -58,7 +58,9 @@ class LeadSubmission(Base):
     lead_id = Column(Integer, ForeignKey('leads.id', ondelete='CASCADE'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     submitted_at = Column(DateTime, default=datetime.utcnow)
-    details = Column(Text, nullable=True)  # JSON/text snapshot of lead at submission
+    details = Column(Text, nullable=True)       # JSON snapshot of lead + agent at submission
+    api_status_code = Column(Integer, nullable=True)  # HTTP status code from external API
+    api_response = Column(Text, nullable=True)  # Raw response body from external API
 
     lead = relationship('Lead', backref='submissions')
     user = relationship('User')
