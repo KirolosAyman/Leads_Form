@@ -212,7 +212,6 @@ async def delete_leads(req: DeleteLeadsRequest, db: Session = Depends(database.g
 @router.get('/leads/submissions')
 async def list_submissions(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
     subs = db.query(models.LeadSubmission).order_by(models.LeadSubmission.submitted_at.desc()).all()
-    # return structured list
     out = []
     import json
     for s in subs:
@@ -220,12 +219,17 @@ async def list_submissions(db: Session = Depends(database.get_db), current_user:
             details = json.loads(s.details) if s.details else None
         except Exception:
             details = s.details
+        # Always pull the live phone from the Lead table so old snapshots show phone correctly
+        lead = db.query(models.Lead).filter(models.Lead.id == s.lead_id).first()
         out.append({
             'id': s.id,
             'lead_id': s.lead_id,
             'user_id': s.user_id,
             'submitted_at': s.submitted_at,
-            'details': details
+            'details': details,
+            'lead_phone': lead.phone if lead else None,
+            'api_status_code': s.api_status_code,
+            'api_response': s.api_response,
         })
     return out
 
@@ -275,6 +279,20 @@ async def search_lead(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
+
+
+@router.get("/leads/{lead_id}", response_model=schemas.LeadOut)
+async def get_lead_by_id(
+    lead_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.require_admin)
+):
+    """Get a single lead by ID — admin only (used by submissions Lead Details modal)"""
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
 
 @router.put("/leads/{lead_id}", response_model=schemas.LeadOut)
 async def update_lead(
