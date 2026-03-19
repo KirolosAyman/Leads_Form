@@ -265,8 +265,39 @@ const AdminDashboard = () => {
                         <div style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(0,255,100,0.1)', borderRadius: '8px' }}>
                             <h3 style={{ color: 'hsl(var(--success))', display: 'flex', alignItems: 'center', gap: '10px' }}><CheckCircle size={20} /> Upload Successful</h3>
                             <p>Processed: {uploadStatus.data.success_count} records</p>
-                            {uploadStatus.data.duplicate_count > 0 && <div style={{ marginTop: '0.5rem', color: 'hsl(var(--error))' }}>{uploadStatus.data.duplicate_count} duplicates skipped.</div>}
-                            {uploadStatus.data.error_count > 0 && <div style={{ marginTop: '0.5rem', color: 'hsl(var(--error))' }}>{uploadStatus.data.error_count} rows had errors.</div>}
+                            
+                            {uploadStatus.data.skipped_count > 0 && (
+                                <div style={{ marginTop: '0.5rem', color: 'hsl(var(--warning))' }}>
+                                    <strong>{uploadStatus.data.skipped_count} rows skipped.</strong>
+                                    {uploadStatus.data.skipped && uploadStatus.data.skipped.length > 0 && (
+                                        <ul style={{ margin: '5px 0 0 20px', fontSize: '0.85rem' }}>
+                                            {uploadStatus.data.skipped.map((msg, i) => <li key={i}>{msg}</li>)}
+                                        </ul>
+                                    )}
+                                </div>
+                            )}
+
+                            {uploadStatus.data.duplicate_count > 0 && (
+                                <div style={{ marginTop: '0.5rem', color: 'hsl(var(--error))' }}>
+                                    <strong>{uploadStatus.data.duplicate_count} duplicates skipped.</strong>
+                                    {uploadStatus.data.duplicates && uploadStatus.data.duplicates.length > 0 && (
+                                        <ul style={{ margin: '5px 0 0 20px', fontSize: '0.85rem' }}>
+                                            {uploadStatus.data.duplicates.map((msg, i) => <li key={i}>{msg}</li>)}
+                                        </ul>
+                                    )}
+                                </div>
+                            )}
+                            
+                            {uploadStatus.data.error_count > 0 && (
+                                <div style={{ marginTop: '0.5rem', color: 'hsl(var(--error))' }}>
+                                    <strong>{uploadStatus.data.error_count} rows had errors.</strong>
+                                    {uploadStatus.data.errors && uploadStatus.data.errors.length > 0 && (
+                                        <ul style={{ margin: '5px 0 0 20px', fontSize: '0.85rem' }}>
+                                            {uploadStatus.data.errors.map((msg, i) => <li key={i}>{msg}</li>)}
+                                        </ul>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                     {uploadStatus?.type === 'error' && (
