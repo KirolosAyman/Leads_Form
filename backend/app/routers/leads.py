@@ -84,7 +84,10 @@ async def upload_leads(
                     if pd.isna(val):
                         lead_data[field] = None
                     else:
-                        lead_data[field] = str(val).strip()
+                        str_val = str(val).strip()
+                        if str_val.endswith('.0'):
+                            str_val = str_val[:-2]
+                        lead_data[field] = str_val
                 else:
                     lead_data[field] = None
 
