@@ -44,22 +44,22 @@ class ResetPasswordRequest(BaseModel):
 
 # Leads
 class LeadBase(BaseModel):
-    contact_id: str
-    phone: str
-    first_name: str
-    last_name: str
-    title: str
-    company: str
-    street: str
-    city: str
-    state: str
-    zip: str
+    contact_id: Optional[str] = None
+    phone: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    title: Optional[str] = None
+    company: Optional[str] = None
+    street: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip: Optional[str] = None
     web_site: Optional[str] = None
     annual_sales: Optional[str] = None
     employee_count: Optional[str] = None
-    sic_code: str
+    sic_code: Optional[str] = None
     industry: Optional[str] = None
-    recording: str
+    recording: Optional[str] = None
 
 class LeadCreate(LeadBase):
     pass

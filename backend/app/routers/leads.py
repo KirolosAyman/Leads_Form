@@ -1,4 +1,5 @@
 import os
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
@@ -62,6 +63,10 @@ async def upload_leads(
     success_count = 0
     errors = []
     duplicates = []
+    skipped = []
+
+    # Phone pattern: NXXNXXXXXX or +1NXXNXXXXXX  (N = digit 2-9)
+    PHONE_PATTERN = re.compile(r'^\+?1?[2-9]\d{2}[2-9]\d{6}$')
 
     # target fields we support (will be read if present)
     target_fields = [
@@ -82,13 +87,34 @@ async def upload_leads(
                         lead_data[field] = str(val).strip()
                 else:
                     lead_data[field] = None
-            # Skip if phone already exists (treat as duplicate)
+
+            # ── Guard 1: skip completely empty rows ──────────────────────
+            if all(v is None or v == '' for v in lead_data.values()):
+                skipped.append(f"Row {idx+2}: empty row skipped")
+                continue
+
+            # ── Guard 2: validate phone number pattern ───────────────────
             phone_val = lead_data.get('phone')
-            if phone_val:
-                existing = db.query(models.Lead).filter(models.Lead.phone == phone_val).first()
-                if existing:
-                    duplicates.append(f"Row {idx+2}: duplicate phone={phone_val}")
+            if phone_val is not None:
+                # Strip spaces/dashes for matching, keep original for storage
+                phone_clean = re.sub(r'[\s\-\(\)]', '', phone_val)
+                if not PHONE_PATTERN.match(phone_clean):
+                    errors.append(
+                        f"Row {idx+2}: Cannot save this Lead (contact_id={lead_data.get('contact_id') or 'N/A'}) — "
+                        f"phone '{phone_val}' does not match required format NXXNXXXXXX or +1NXXNXXXXXX "
+                        f"(first digit and 4th digit must each be 2-9)"
+                    )
                     continue
+            else:
+                # phone is required; skip rows without one
+                errors.append(f"Row {idx+2}: Cannot save this Lead — phone number is missing")
+                continue
+
+            # ── Guard 3: skip duplicate phone ────────────────────────────
+            existing = db.query(models.Lead).filter(models.Lead.phone == phone_val).first()
+            if existing:
+                duplicates.append(f"Row {idx+2}: duplicate phone={phone_val}")
+                continue
 
             # create model instance directly (bypass strict pydantic validation for uploads)
             db_lead = models.Lead(**lead_data)
@@ -105,33 +131,26 @@ async def upload_leads(
                 errors.append(f"Row {idx+2}: {str(e)}")
         except Exception as e:
             errors.append(f"Row {idx+2}: {str(e)}")
-    
+
     response = {
         "message": "Upload processed",
         "total_rows": len(df),
         "success_count": success_count,
         "error_count": len(errors),
+        "skipped_count": len(skipped),
         "duplicate_count": len(duplicates)
     }
 
     if errors:
-        response["errors"] = errors[:20]
-    # If nothing was processed, return some debug info to help identify column/name mismatches
+        response["errors"] = errors[:50]
+    if skipped:
+        response["skipped"] = skipped[:50]
+    if duplicates:
+        response["duplicates"] = duplicates[:50]
 
     if success_count == 0 and os.getenv("DEBUG", False):
         response["columns"] = list(df.columns)
         response["sample_rows"] = df.head(3).to_dict(orient="records")
-
-    #if success_count == 0:
-        #response["columns"] = list(df.columns)
-        # include up to 3 sample rows
-        #try:
-        #    response["sample_rows"] = df.head(3).to_dict(orient="records")
-        #except Exception:
-        #    response["sample_rows"] = []
-
-    if duplicates:
-        response["duplicates"] = duplicates[:50]
 
     return response
 
