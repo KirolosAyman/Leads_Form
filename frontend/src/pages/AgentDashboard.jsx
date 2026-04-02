@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import {
     Search, Edit2, Save, X, Phone, User, MapPin,
-    Mail, Lock, CheckCircle, AlertCircle, Loader, PlusCircle, ChevronDown, ChevronUp
+    Mail, Lock, CheckCircle, AlertCircle, Loader, PlusCircle, ChevronDown, ChevronUp, Copy
 } from 'lucide-react';
 
 /* ── blank manual form ────────────────────────────────────────────────────── */
@@ -49,9 +49,11 @@ const AgentDashboard = () => {
 
     /* ── manual entry state ────────────────────────────────────────────────── */
     const [showManual, setShowManual] = useState(false);
+    const [isSubLead, setIsSubLead] = useState(false);   // true when opened via 'Add Sub Lead'
     const [manualForm, setManualForm] = useState(EMPTY_FORM);
     const [manualError, setManualError] = useState('');
     const [manualSaving, setManualSaving] = useState(false);
+    const manualFormRef = useRef(null);                  // used to scroll the form into view
 
     /* ── handlers ──────────────────────────────────────────────────────────── */
     const handleSearch = async (e) => {
@@ -122,6 +124,7 @@ const AgentDashboard = () => {
             setSubmitResult(null);
             setManualForm(EMPTY_FORM);
             setShowManual(false);
+            setIsSubLead(false);
             setError('');
         } catch (err) {
             setManualError(err.response?.data?.detail || 'Failed to save lead. Please check the phone number.');
@@ -131,8 +134,37 @@ const AgentDashboard = () => {
     };
 
     const handleManualClear = () => {
-        setManualForm(EMPTY_FORM);
+        setManualForm(isSubLead
+            ? { ...EMPTY_FORM, company: manualForm.company, street: manualForm.street, city: manualForm.city, state: manualForm.state, zip: manualForm.zip, web_site: manualForm.web_site, annual_sales: manualForm.annual_sales, employee_count: manualForm.employee_count, sic_code: manualForm.sic_code, industry: manualForm.industry, recording: manualForm.recording }
+            : EMPTY_FORM
+        );
         setManualError('');
+    };
+
+    /* Opens the manual form pre-filled with company/address from current lead,
+       but with all Contact Info fields empty for the new person. */
+    const handleAddSubLead = () => {
+        setManualForm({
+            // Contact Info — all empty for the agent to fill
+            phone: '', first_name: '', last_name: '', title: '', contact_id: '',
+            // Everything else inherited from the parent lead
+            company:        lead.company        || '',
+            street:         lead.street         || '',
+            city:           lead.city           || '',
+            state:          lead.state          || '',
+            zip:            lead.zip            || '',
+            web_site:       lead.web_site       || '',
+            annual_sales:   lead.annual_sales   || '',
+            employee_count: lead.employee_count || '',
+            sic_code:       lead.sic_code       || '',
+            industry:       lead.industry       || '',
+            recording:      lead.recording      || '',
+        });
+        setManualError('');
+        setIsSubLead(true);
+        setShowManual(true);
+        // Scroll to form after it renders
+        setTimeout(() => manualFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
     };
 
     /* ── renderField for the lead card (read/edit mode) ───────────────────── */
@@ -193,7 +225,7 @@ const AgentDashboard = () => {
             <div style={{ maxWidth: '600px', margin: '0 auto 2rem auto' }}>
                 <button
                     id="toggle-manual-entry"
-                    onClick={() => { setShowManual(v => !v); setManualError(''); }}
+                    onClick={() => { setShowManual(v => !v); setIsSubLead(false); setManualError(''); if (showManual) setManualForm(EMPTY_FORM); }}
                     style={{
                         width: '100%',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
@@ -217,12 +249,16 @@ const AgentDashboard = () => {
 
             {/* ── Manual Entry Form ────────────────────────────────────────── */}
             {showManual && (
-                <div className="glass-panel fade-in" style={{ maxWidth: '800px', margin: '0 auto 2.5rem auto', padding: '2rem' }}>
+                <div ref={manualFormRef} className="glass-panel fade-in" style={{ maxWidth: '800px', margin: '0 auto 2.5rem auto', padding: '2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--glass-border)' }}>
                         <div>
-                            <h2 style={{ fontSize: '1.3rem', marginBottom: '4px' }}>Manual Lead Entry</h2>
+                            <h2 style={{ fontSize: '1.3rem', marginBottom: '4px' }}>
+                                {isSubLead ? <><Copy size={18} style={{ verticalAlign: 'middle', marginRight: '6px' }} />Add Sub Lead</> : 'Manual Lead Entry'}
+                            </h2>
                             <p style={{ color: 'var(--text-muted)', fontSize: '0.83rem', margin: 0 }}>
-                                Fill in the caller's information. Phone number is required.
+                                {isSubLead
+                                    ? <>Company &amp; address are pre-filled from the original lead. Fill in the new contact's details.</>  
+                                    : 'Fill in the caller\'s information. Phone number is required.'}
                             </p>
                         </div>
                         <button
@@ -364,27 +400,50 @@ const AgentDashboard = () => {
                             </div>
                         </div>
 
-                        {/* Edit / Save / Cancel controls */}
-                        {!lead.is_submitted && (
-                            !isEditing ? (
-                                <button onClick={() => setIsEditing(true)} className="btn-secondary flex-center gap-4">
-                                    <Edit2 size={16} /> Edit
-                                </button>
-                            ) : (
-                                <div className="flex-center gap-4">
-                                    <button
-                                        onClick={() => { setIsEditing(false); setEditForm(lead); }}
-                                        className="btn-secondary"
-                                        style={{ borderColor: '#ff6b6b', color: '#ff6b6b' }}
-                                    >
-                                        <X size={16} /> Cancel
+                        {/* Edit / Save / Cancel + Add Sub Lead controls */}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {/* Add Sub Lead — always shown when a lead is loaded */}
+                            <button
+                                id="add-sub-lead-btn"
+                                onClick={handleAddSubLead}
+                                title="Create a new lead using this company's info"
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '7px 14px', borderRadius: '10px',
+                                    background: 'rgba(120,80,255,0.1)',
+                                    border: '1px solid rgba(120,80,255,0.35)',
+                                    color: 'hsl(var(--primary))',
+                                    cursor: 'pointer', fontSize: '0.83rem', fontWeight: 600,
+                                    transition: 'all 0.2s',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(120,80,255,0.22)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(120,80,255,0.25)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(120,80,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                            >
+                                <Copy size={15} /> Add Sub Lead
+                            </button>
+
+                            {/* Edit / Save / Cancel — only for non-submitted leads */}
+                            {!lead.is_submitted && (
+                                !isEditing ? (
+                                    <button onClick={() => setIsEditing(true)} className="btn-secondary flex-center gap-4">
+                                        <Edit2 size={16} /> Edit
                                     </button>
-                                    <button onClick={handleUpdate} className="btn-primary flex-center gap-4">
-                                        <Save size={16} /> Save Changes
-                                    </button>
-                                </div>
-                            )
-                        )}
+                                ) : (
+                                    <div className="flex-center gap-4">
+                                        <button
+                                            onClick={() => { setIsEditing(false); setEditForm(lead); }}
+                                            className="btn-secondary"
+                                            style={{ borderColor: '#ff6b6b', color: '#ff6b6b' }}
+                                        >
+                                            <X size={16} /> Cancel
+                                        </button>
+                                        <button onClick={handleUpdate} className="btn-primary flex-center gap-4">
+                                            <Save size={16} /> Save Changes
+                                        </button>
+                                    </div>
+                                )
+                            )}
+                        </div>
                     </div>
 
                     {/* Fields grid */}
