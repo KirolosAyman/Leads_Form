@@ -3,19 +3,57 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import {
     Search, Edit2, Save, X, Phone, User, MapPin,
-    Mail, Lock, CheckCircle, AlertCircle, Loader
+    Mail, Lock, CheckCircle, AlertCircle, Loader, PlusCircle, ChevronDown, ChevronUp
 } from 'lucide-react';
+
+/* ── blank manual form ────────────────────────────────────────────────────── */
+const EMPTY_FORM = {
+    phone: '', first_name: '', last_name: '', title: '',
+    company: '', street: '', city: '', state: '', zip: '',
+    web_site: '', annual_sales: '', employee_count: '',
+    sic_code: '', industry: '', recording: '', contact_id: '',
+};
+
+/* ── small labelled input used in both forms ─────────────────────────────── */
+const Field = ({ label, name, value, onChange, required = false, placeholder = '' }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <label style={{
+            fontSize: '0.72rem', textTransform: 'uppercase',
+            letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 600,
+        }}>
+            {label}{required && <span style={{ color: '#ff6b6b', marginLeft: '3px' }}>*</span>}
+        </label>
+        <input
+            className="glass-input"
+            style={{ margin: 0, padding: '8px 12px', fontSize: '0.9rem' }}
+            name={name}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder || label}
+            required={required}
+        />
+    </div>
+);
 
 const AgentDashboard = () => {
     const { user } = useAuth();
+
+    /* ── search state ──────────────────────────────────────────────────────── */
     const [searchPhone, setSearchPhone] = useState('');
     const [lead, setLead] = useState(null);
     const [error, setError] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [editForm, setEditForm] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [submitResult, setSubmitResult] = useState(null); // { success, message, detail }
+    const [submitResult, setSubmitResult] = useState(null);
 
+    /* ── manual entry state ────────────────────────────────────────────────── */
+    const [showManual, setShowManual] = useState(false);
+    const [manualForm, setManualForm] = useState(EMPTY_FORM);
+    const [manualError, setManualError] = useState('');
+    const [manualSaving, setManualSaving] = useState(false);
+
+    /* ── handlers ──────────────────────────────────────────────────────────── */
     const handleSearch = async (e) => {
         e.preventDefault();
         setError('');
@@ -26,7 +64,8 @@ const AgentDashboard = () => {
             const res = await api.get(`/leads/search/${searchPhone}`);
             setLead(res.data);
             setEditForm(res.data);
-        } catch (err) {
+            setShowManual(false);
+        } catch {
             setError('Lead not found. Please check the phone number.');
         }
     };
@@ -38,7 +77,7 @@ const AgentDashboard = () => {
             setEditForm(res.data);
             setIsEditing(false);
             alert('Lead updated successfully!');
-        } catch (err) {
+        } catch {
             alert('Failed to update lead');
         }
     };
@@ -57,42 +96,65 @@ const AgentDashboard = () => {
         } catch (err) {
             const status = err?.response?.status;
             const detail = err?.response?.data?.detail || 'An unexpected error occurred.';
-
             let message = 'Submission failed.';
-            if (status === 409) {
-                message = 'This lead is already submitted.';
-            } else if (status === 422) {
-                message = 'Missing required fields.';
-            } else if (status === 502) {
-                message = 'Could not reach the external API.';
-            }
-
+            if (status === 409) message = 'This lead is already submitted.';
+            else if (status === 422) message = 'Missing required fields.';
+            else if (status === 502) message = 'Could not reach the external API.';
             setSubmitResult({ success: false, message, detail });
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const renderField = (label, key, icon, editable = true) => {
-        return (
-            <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>{label}</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {icon}
-                    {isEditing && editable && !lead.is_submitted ? (
-                        <input
-                            className="glass-input"
-                            value={editForm[key] || ''}
-                            onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })}
-                        />
-                    ) : (
-                        <span style={{ fontSize: '1.1rem', fontWeight: '500' }}>{lead[key] || 'N/A'}</span>
-                    )}
-                </div>
-            </div>
-        );
+    const handleManualChange = (e) =>
+        setManualForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+    const handleManualSave = async (e) => {
+        e.preventDefault();
+        setManualError('');
+        setManualSaving(true);
+        try {
+            const res = await api.post('/leads/manual', manualForm);
+            // Load the new lead into the card view
+            setLead(res.data);
+            setEditForm(res.data);
+            setIsEditing(false);
+            setSubmitResult(null);
+            setManualForm(EMPTY_FORM);
+            setShowManual(false);
+            setError('');
+        } catch (err) {
+            setManualError(err.response?.data?.detail || 'Failed to save lead. Please check the phone number.');
+        } finally {
+            setManualSaving(false);
+        }
     };
 
+    const handleManualClear = () => {
+        setManualForm(EMPTY_FORM);
+        setManualError('');
+    };
+
+    /* ── renderField for the lead card (read/edit mode) ───────────────────── */
+    const renderField = (label, key, icon, editable = true) => (
+        <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>{label}</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {icon}
+                {isEditing && editable && !lead.is_submitted ? (
+                    <input
+                        className="glass-input"
+                        value={editForm[key] || ''}
+                        onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })}
+                    />
+                ) : (
+                    <span style={{ fontSize: '1.1rem', fontWeight: '500' }}>{lead[key] || 'N/A'}</span>
+                )}
+            </div>
+        </div>
+    );
+
+    /* ─────────────────────────────────────────────────────────────────────── */
     return (
         <div className="container fade-in">
             <header style={{ marginBottom: '3rem', textAlign: 'center' }}>
@@ -105,8 +167,8 @@ const AgentDashboard = () => {
                 )}
             </header>
 
-            {/* ── Search Bar ─────────────────────────────────────────────── */}
-            <div className="glass-panel" style={{ maxWidth: '600px', margin: '0 auto 2rem auto', padding: '1rem' }}>
+            {/* ── Search Bar ──────────────────────────────────────────────── */}
+            <div className="glass-panel" style={{ maxWidth: '600px', margin: '0 auto 1.5rem auto', padding: '1rem' }}>
                 <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px' }}>
                     <input
                         className="glass-input"
@@ -122,47 +184,190 @@ const AgentDashboard = () => {
             </div>
 
             {error && (
-                <div style={{ textAlign: 'center', color: '#ff6b6b', marginBottom: '2rem' }}>
+                <div style={{ textAlign: 'center', color: '#ff6b6b', marginBottom: '1rem' }}>
                     {error}
                 </div>
             )}
 
-            {/* ── Lead Card ──────────────────────────────────────────────── */}
+            {/* ── Manual Entry Toggle ──────────────────────────────────────── */}
+            <div style={{ maxWidth: '600px', margin: '0 auto 2rem auto' }}>
+                <button
+                    id="toggle-manual-entry"
+                    onClick={() => { setShowManual(v => !v); setManualError(''); }}
+                    style={{
+                        width: '100%',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                        padding: '10px 0',
+                        background: showManual
+                            ? 'rgba(4,190,254,0.12)'
+                            : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${showManual ? 'rgba(4,190,254,0.35)' : 'rgba(255,255,255,0.09)'}`,
+                        borderRadius: '12px',
+                        color: showManual ? 'hsl(var(--secondary))' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        fontSize: '0.88rem', fontWeight: 600,
+                        transition: 'all 0.25s',
+                    }}
+                >
+                    <PlusCircle size={16} />
+                    Add Lead Manually
+                    {showManual ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                </button>
+            </div>
+
+            {/* ── Manual Entry Form ────────────────────────────────────────── */}
+            {showManual && (
+                <div className="glass-panel fade-in" style={{ maxWidth: '800px', margin: '0 auto 2.5rem auto', padding: '2rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--glass-border)' }}>
+                        <div>
+                            <h2 style={{ fontSize: '1.3rem', marginBottom: '4px' }}>Manual Lead Entry</h2>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.83rem', margin: 0 }}>
+                                Fill in the caller's information. Phone number is required.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setShowManual(false)}
+                            style={{
+                                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                                color: 'var(--text-muted)', padding: '7px 8px', borderRadius: '8px',
+                                cursor: 'pointer', display: 'flex', alignItems: 'center',
+                            }}
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleManualSave}>
+                        {/* Required fields row */}
+                        <div style={{ marginBottom: '1rem' }}>
+                            <div style={{
+                                fontSize: '0.72rem', textTransform: 'uppercase',
+                                letterSpacing: '0.06em', color: 'hsl(var(--secondary))',
+                                fontWeight: 700, marginBottom: '0.75rem',
+                            }}>
+                                📞 Contact Info
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: '0.8rem' }}>
+                                <Field label="Phone" name="phone" value={manualForm.phone} onChange={handleManualChange} required placeholder="e.g. 3055551234" />
+                                <Field label="First Name" name="first_name" value={manualForm.first_name} onChange={handleManualChange} required />
+                                <Field label="Last Name" name="last_name" value={manualForm.last_name} onChange={handleManualChange} required />
+                                <Field label="Title" name="title" value={manualForm.title} onChange={handleManualChange} />
+                                <Field label="Company" name="company" value={manualForm.company} onChange={handleManualChange} required />
+                                <Field label="Contact ID" name="contact_id" value={manualForm.contact_id} onChange={handleManualChange} />
+                            </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '1.25rem 0' }} />
+
+                        {/* Address */}
+                        <div style={{ marginBottom: '1rem' }}>
+                            <div style={{
+                                fontSize: '0.72rem', textTransform: 'uppercase',
+                                letterSpacing: '0.06em', color: 'hsl(var(--secondary))',
+                                fontWeight: 700, marginBottom: '0.75rem',
+                            }}>
+                                📍 Address
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px,1fr))', gap: '0.8rem' }}>
+                                <Field label="Street" name="street" value={manualForm.street} onChange={handleManualChange} required />
+                                <Field label="City" name="city" value={manualForm.city} onChange={handleManualChange} required />
+                                <Field label="State" name="state" value={manualForm.state} onChange={handleManualChange} required />
+                                <Field label="ZIP" name="zip" value={manualForm.zip} onChange={handleManualChange} required />
+                            </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '1.25rem 0' }} />
+
+                        {/* Optional business info */}
+                        <div style={{ marginBottom: '1.25rem' }}>
+                            <div style={{
+                                fontSize: '0.72rem', textTransform: 'uppercase',
+                                letterSpacing: '0.06em', color: 'hsl(var(--secondary))',
+                                fontWeight: 700, marginBottom: '0.75rem',
+                            }}>
+                                💼 Business Info <span style={{ opacity: 0.6, fontWeight: 400, textTransform: 'none', fontSize: '0.7rem' }}>(optional)</span>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px,1fr))', gap: '0.8rem' }}>
+                                <Field label="Website" name="web_site" value={manualForm.web_site} onChange={handleManualChange} />
+                                <Field label="Annual Sales" name="annual_sales" value={manualForm.annual_sales} onChange={handleManualChange} />
+                                <Field label="Employee Count" name="employee_count" value={manualForm.employee_count} onChange={handleManualChange} />
+                                <Field label="SIC Code" name="sic_code" value={manualForm.sic_code} onChange={handleManualChange} />
+                                <Field label="Industry" name="industry" value={manualForm.industry} onChange={handleManualChange} />
+                                <Field label="Recording" name="recording" value={manualForm.recording} onChange={handleManualChange} />
+                            </div>
+                        </div>
+
+                        {/* Error banner */}
+                        {manualError && (
+                            <div style={{
+                                marginBottom: '1.25rem', padding: '0.85rem 1.1rem',
+                                background: 'rgba(255,107,107,0.1)', border: '1px solid #ff6b6b',
+                                borderRadius: '10px', color: '#ff6b6b',
+                                display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.88rem',
+                            }}>
+                                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                                {manualError}
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                            <button
+                                type="button"
+                                onClick={handleManualClear}
+                                className="btn-secondary"
+                                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                <X size={15} /> Clear
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={manualSaving}
+                                className="btn-primary"
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    opacity: manualSaving ? 0.7 : 1,
+                                    cursor: manualSaving ? 'not-allowed' : 'pointer',
+                                    minWidth: '140px', justifyContent: 'center',
+                                }}
+                            >
+                                {manualSaving
+                                    ? <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+                                    : <><Save size={15} /> Save &amp; Load Lead</>
+                                }
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {/* ── Lead Card ───────────────────────────────────────────────── */}
             {lead && (
                 <div className="glass-panel fade-in" style={{ maxWidth: '800px', margin: '0 auto', padding: '2.5rem' }}>
 
                     {/* Header row */}
                     <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        marginBottom: '2rem',
-                        borderBottom: '1px solid var(--glass-border)',
-                        paddingBottom: '1rem'
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                        marginBottom: '2rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1rem',
                     }}>
                         <div>
                             <h2 style={{ fontSize: '1.8rem' }}>{lead.first_name} {lead.last_name}</h2>
-                            <span style={{ color: 'var(--secondary)', fontSize: '0.9rem' }}>ID: {lead.contact_id}</span>
+                            <span style={{ color: 'var(--secondary)', fontSize: '0.9rem' }}>ID: {lead.contact_id || '—'}</span>
                             <div style={{
-                                marginTop: '0.5rem',
-                                fontSize: '0.85rem',
+                                marginTop: '0.5rem', fontSize: '0.85rem',
                                 color: lead.is_submitted ? '#4ecdc4' : '#ff6b6b',
-                                display: 'flex', alignItems: 'center', gap: '6px'
+                                display: 'flex', alignItems: 'center', gap: '6px',
                             }}>
                                 {lead.is_submitted
-                                    ? <><CheckCircle size={14} /> Submitted & Locked</>
-                                    : <><AlertCircle size={14} /> Pending Submission</>
-                                }
+                                    ? <><CheckCircle size={14} /> Submitted &amp; Locked</>
+                                    : <><AlertCircle size={14} /> Pending Submission</>}
                             </div>
                         </div>
 
                         {/* Edit / Save / Cancel controls */}
                         {!lead.is_submitted && (
                             !isEditing ? (
-                                <button
-                                    onClick={() => setIsEditing(true)}
-                                    className="btn-secondary flex-center gap-4"
-                                >
+                                <button onClick={() => setIsEditing(true)} className="btn-secondary flex-center gap-4">
                                     <Edit2 size={16} /> Edit
                                 </button>
                             ) : (
@@ -205,47 +410,29 @@ const AgentDashboard = () => {
                     {/* ── Submit Result Banner ───────────────────────────── */}
                     {submitResult && (
                         <div style={{
-                            marginBottom: '1.5rem',
-                            padding: '1rem 1.25rem',
-                            borderRadius: '10px',
-                            background: submitResult.success
-                                ? 'rgba(78, 205, 196, 0.12)'
-                                : 'rgba(255, 107, 107, 0.12)',
+                            marginBottom: '1.5rem', padding: '1rem 1.25rem', borderRadius: '10px',
+                            background: submitResult.success ? 'rgba(78,205,196,0.12)' : 'rgba(255,107,107,0.12)',
                             border: `1px solid ${submitResult.success ? '#4ecdc4' : '#ff6b6b'}`,
-                            display: 'flex',
-                            gap: '12px',
-                            alignItems: 'flex-start',
+                            display: 'flex', gap: '12px', alignItems: 'flex-start',
                         }}>
                             {submitResult.success
                                 ? <CheckCircle size={20} color="#4ecdc4" style={{ flexShrink: 0, marginTop: '2px' }} />
-                                : <AlertCircle size={20} color="#ff6b6b" style={{ flexShrink: 0, marginTop: '2px' }} />
-                            }
+                                : <AlertCircle size={20} color="#ff6b6b" style={{ flexShrink: 0, marginTop: '2px' }} />}
                             <div>
-                                <div style={{
-                                    fontWeight: '600',
-                                    color: submitResult.success ? '#4ecdc4' : '#ff6b6b',
-                                    marginBottom: '4px'
-                                }}>
+                                <div style={{ fontWeight: '600', color: submitResult.success ? '#4ecdc4' : '#ff6b6b', marginBottom: '4px' }}>
                                     {submitResult.message}
                                 </div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                    {submitResult.detail}
-                                </div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{submitResult.detail}</div>
                             </div>
                         </div>
                     )}
 
                     {/* ── Submit Footer ──────────────────────────────────── */}
                     <div style={{
-                        paddingTop: '1.5rem',
-                        borderTop: '1px solid var(--glass-border)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: '1rem',
-                        flexWrap: 'wrap',
+                        paddingTop: '1.5rem', borderTop: '1px solid var(--glass-border)',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        gap: '1rem', flexWrap: 'wrap',
                     }}>
-                        {/* Status copy */}
                         <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', flex: 1 }}>
                             {lead.is_submitted ? (
                                 <span style={{ color: '#4ecdc4', fontWeight: '500' }}>
@@ -263,7 +450,6 @@ const AgentDashboard = () => {
                             )}
                         </div>
 
-                        {/* Submit button — hidden if already submitted */}
                         {!lead.is_submitted && (
                             <button
                                 id="submit-lead-btn"
@@ -271,26 +457,17 @@ const AgentDashboard = () => {
                                 disabled={isSubmitting || isEditing}
                                 className="btn-primary"
                                 style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
+                                    display: 'flex', alignItems: 'center', gap: '8px',
                                     opacity: (isSubmitting || isEditing) ? 0.65 : 1,
                                     cursor: (isSubmitting || isEditing) ? 'not-allowed' : 'pointer',
-                                    minWidth: '130px',
-                                    justifyContent: 'center',
+                                    minWidth: '130px', justifyContent: 'center',
                                 }}
                                 title={isEditing ? 'Save your edits before submitting' : 'Submit this lead'}
                             >
-                                {isSubmitting ? (
-                                    <>
-                                        <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                        Submitting…
-                                    </>
-                                ) : (
-                                    <>
-                                        <Lock size={16} /> Submit Lead
-                                    </>
-                                )}
+                                {isSubmitting
+                                    ? <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Submitting…</>
+                                    : <><Lock size={16} /> Submit Lead</>
+                                }
                             </button>
                         )}
                     </div>

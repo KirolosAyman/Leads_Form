@@ -403,6 +403,62 @@ async def search_lead(
     return lead
 
 
+@router.post("/leads/manual", response_model=schemas.LeadOut)
+async def create_lead_manually(
+    lead_in: schemas.LeadCreate,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_active_user),
+):
+    """
+    Agent manually creates a new lead (caller whose data isn't in the system).
+    - Phone is required and must match the standard format.
+    - Duplicate phone numbers are rejected.
+    - Any authenticated user (agent or admin) may call this.
+    """
+    PHONE_PATTERN = re.compile(r'^\+?1?[2-9]\d{2}[2-9]\d{6}$')
+
+    # Phone is required
+    if not lead_in.phone or not str(lead_in.phone).strip():
+        raise HTTPException(status_code=422, detail="Phone number is required")
+
+    phone_clean = re.sub(r'[\s\-\(\)]', '', str(lead_in.phone).strip())
+
+    if not PHONE_PATTERN.match(phone_clean):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Phone '{lead_in.phone}' does not match the required format "
+                   f"NXXNXXXXXX or +1NXXNXXXXXX (first and 4th digit must each be 2-9)"
+        )
+
+    # Duplicate check
+    existing = db.query(models.Lead).filter(models.Lead.phone == phone_clean).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A lead with phone {phone_clean} already exists (ID {existing.id}). "
+                   f"Please search for it instead."
+        )
+
+    lead_data = lead_in.model_dump()
+    lead_data['phone'] = phone_clean          # store normalised phone
+
+    db_lead = models.Lead(**lead_data)
+    db.add(db_lead)
+    try:
+        db.commit()
+        db.refresh(db_lead)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Duplicate phone number")
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return db_lead
+
+
+
+
 @router.get("/leads/{lead_id}", response_model=schemas.LeadOut)
 async def get_lead_by_id(
     lead_id: int,
