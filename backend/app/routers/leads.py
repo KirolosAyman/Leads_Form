@@ -29,18 +29,18 @@ async def upload_leads(
 ):
     """
     Upload leads from a file. We'll try to read as Excel first, then CSV.
-    This endpoint no longer enforces strict column constraints so you can
-    upload varied test files; missing columns will be saved as NULLs.
+    Properly handles mixed data types and empty rows.
     """
     contents = await file.read()
 
-    # Try reading as Excel first; if that fails, try CSV. If both fail, return error.
+    # Try reading as Excel first; if that fails, try CSV.
     df = None
     read_error = None
     try:
-        # try reading Excel; read all sheets so we don't miss data on other sheets
+        # Try reading Excel
         try:
-            xls = pd.read_excel(io.BytesIO(contents), sheet_name=None)
+            # Read all sheets and preserve data types as much as possible
+            xls = pd.read_excel(io.BytesIO(contents), sheet_name=None, dtype=str)
             # xls is a dict of DataFrames; concatenate non-empty sheets
             if isinstance(xls, dict):
                 sheets = [df for df in xls.values() if not df.empty]
@@ -52,74 +52,88 @@ async def upload_leads(
                 df = xls
         except Exception as e:
             read_error = e
-            df = pd.read_csv(io.BytesIO(contents))
+            # Try CSV with string dtype to avoid float conversion
+            df = pd.read_csv(io.BytesIO(contents), dtype=str, keep_default_na=False)
     except Exception as e2:
         raise HTTPException(status_code=400, detail=f"Could not read file as Excel or CSV: {read_error}; {e2}")
 
-    # normalize columns to lowercase stripped names for easier mapping
+    # Normalize columns to lowercase stripped names
     df.columns = [str(c).strip().lower() for c in df.columns]
 
-    # Process and save leads without strict validation: missing columns become None
-    success_count = 0
-    errors = []
-    duplicates = []
-    skipped = []
-
-    # Phone pattern: NXXNXXXXXX or +1NXXNXXXXXX  (N = digit 2-9)
-    PHONE_PATTERN = re.compile(r'^\+?1?[2-9]\d{2}[2-9]\d{6}$')
-
-    # target fields we support (will be read if present)
+    # Clean the data: replace empty strings with None and handle NaN/empty values
+    df = df.replace({pd.NA: None, float('nan'): None, 'nan': None, '': None})
+    
+    # For any numeric columns that got converted, remove .0 if present
+    # Phone column is our primary concern
     target_fields = [
         "contact_id","phone","first_name","last_name","title","company",
         "street","city","state","zip","web_site","annual_sales",
         "employee_count","sic_code","industry","recording"
     ]
+    
+    # Clean each field to handle float conversion properly
+    for field in target_fields:
+        if field in df.columns:
+            # Convert to string, handle None, and remove .0 suffix
+            def clean_value(val):
+                if val is None or pd.isna(val):
+                    return None
+                str_val = str(val).strip()
+                # Remove .0 if it's at the end (from float conversion)
+                if str_val.endswith('.0'):
+                    str_val = str_val[:-2]
+                # Return None if empty after cleaning
+                return str_val if str_val else None
+            
+            df[field] = df[field].apply(clean_value)
+
+    # Phone pattern: NXXNXXXXXX or +1NXXNXXXXXX (N = digit 2-9)
+    PHONE_PATTERN = re.compile(r'^\+?1?[2-9]\d{2}[2-9]\d{6}$')
+
+    # Process and save leads
+    success_count = 0
+    errors = []
+    duplicates = []
+    skipped = []
 
     for idx, row in df.iterrows():
         try:
             lead_data = {}
             for field in target_fields:
-                if field in df.columns:
-                    val = row[field]
-                    if pd.isna(val):
-                        lead_data[field] = None
-                    else:
-                        str_val = str(val).strip()
-                        if str_val.endswith('.0'):
-                            str_val = str_val[:-2]
-                        lead_data[field] = str_val
-                else:
-                    lead_data[field] = None
+                lead_data[field] = row.get(field) if field in df.columns else None
 
             # ── Guard 1: skip completely empty rows ──────────────────────
-            if all(v is None or v == '' for v in lead_data.values()):
+            # Check if all fields are None or empty
+            non_empty_fields = [v for v in lead_data.values() if v is not None and str(v).strip()]
+            if not non_empty_fields:
                 skipped.append(f"Row {idx+2}: empty row skipped")
                 continue
 
             # ── Guard 2: validate phone number pattern ───────────────────
             phone_val = lead_data.get('phone')
-            if phone_val is not None:
-                # Strip spaces/dashes for matching, keep original for storage
-                phone_clean = re.sub(r'[\s\-\(\)]', '', phone_val)
-                if not PHONE_PATTERN.match(phone_clean):
-                    errors.append(
-                        f"Row {idx+2}: Cannot save this Lead (contact_id={lead_data.get('contact_id') or 'N/A'}) — "
-                        f"phone '{phone_val}' does not match required format NXXNXXXXXX or +1NXXNXXXXXX "
-                        f"(first digit and 4th digit must each be 2-9)"
-                    )
-                    continue
-            else:
-                # phone is required; skip rows without one
+            if phone_val is None or not str(phone_val).strip():
                 errors.append(f"Row {idx+2}: Cannot save this Lead — phone number is missing")
+                continue
+            
+            # Clean phone number (remove spaces, dashes, parentheses)
+            phone_clean = re.sub(r'[\s\-\(\)]', '', str(phone_val))
+            
+            # Validate phone pattern
+            if not PHONE_PATTERN.match(phone_clean):
+                errors.append(
+                    f"Row {idx+2}: Cannot save this Lead (contact_id={lead_data.get('contact_id') or 'N/A'}) — "
+                    f"phone '{phone_val}' does not match required format NXXNXXXXXX or +1NXXNXXXXXX "
+                    f"(first digit and 4th digit must each be 2-9)"
+                )
                 continue
 
             # ── Guard 3: skip duplicate phone ────────────────────────────
-            existing = db.query(models.Lead).filter(models.Lead.phone == phone_val).first()
+            existing = db.query(models.Lead).filter(models.Lead.phone == phone_clean).first()
             if existing:
                 duplicates.append(f"Row {idx+2}: duplicate phone={phone_val}")
                 continue
 
-            # create model instance directly (bypass strict pydantic validation for uploads)
+            # Create model instance
             db_lead = models.Lead(**lead_data)
             db.add(db_lead)
             try:
@@ -151,6 +165,7 @@ async def upload_leads(
     if duplicates:
         response["duplicates"] = duplicates[:50]
 
+    # Debug info if needed
     if success_count == 0 and os.getenv("DEBUG", False):
         response["columns"] = list(df.columns)
         response["sample_rows"] = df.head(3).to_dict(orient="records")
