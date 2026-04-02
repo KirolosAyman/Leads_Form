@@ -278,13 +278,33 @@ async def list_submissions(
 
         # ── Agent name filter (applied after JSON parse) ─────────────────────
         if agent_name:
-            name_in_details = (
-                details.get('agent_name', '') if isinstance(details, dict) else ''
-            ) or ''
-            submitted_by = details.get('submitted_by', {}) if isinstance(details, dict) else {}
-            full_name_fallback = f"{submitted_by.get('first_name', '')} {submitted_by.get('last_name', '')}".strip()
-            combined = (name_in_details + ' ' + full_name_fallback).lower()
-            if agent_name.lower() not in combined:
+            # 1) agent_name field stored directly in snapshot
+            name_in_details = ''
+            if isinstance(details, dict):
+                name_in_details = (details.get('agent_name') or '').strip()
+
+            # 2) submitted_by block inside snapshot
+            sby_name = ''
+            if isinstance(details, dict):
+                sby = details.get('submitted_by') or {}
+                sby_first = (sby.get('first_name') or '').strip()
+                sby_last  = (sby.get('last_name')  or '').strip()
+                sby_name  = f"{sby_first} {sby_last}".strip()
+
+            # 3) Live User row — ultimate fallback for old records
+            live_name = ''
+            if s.user_id:
+                live_user = db.query(models.User).filter(models.User.id == s.user_id).first()
+                if live_user:
+                    lf = (live_user.first_name or '').strip()
+                    ll = (live_user.last_name  or '').strip()
+                    live_name = f"{lf} {ll}".strip()
+
+            # Combine all sources, normalise whitespace, case-insensitive match
+            combined_parts = ' '.join(filter(None, [name_in_details, sby_name, live_name]))
+            combined = ' '.join(combined_parts.lower().split())   # collapse spaces
+            needle   = ' '.join(agent_name.lower().split())       # collapse spaces in query too
+            if needle not in combined:
                 continue
 
         # Always pull the live phone from the Lead table so old snapshots show phone correctly
@@ -300,6 +320,40 @@ async def list_submissions(
             'api_response': s.api_response,
         })
     return out
+
+
+@router.delete('/leads/submissions/{submission_id}')
+async def delete_submission(
+    submission_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.require_admin),
+):
+    """
+    Delete a submission record and unlock the lead so an agent can resubmit it.
+    Admin only.
+    """
+    submission = db.query(models.LeadSubmission).filter(models.LeadSubmission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    lead_id = submission.lead_id
+
+    # Remove the submission record
+    db.delete(submission)
+
+    # Reset the lead's submitted flag so agents can resubmit
+    lead = db.query(models.Lead).filter(models.Lead.id == lead_id).first()
+    if lead:
+        lead.is_submitted = False
+        db.add(lead)
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(exc)}")
+
+    return {"message": "Submission deleted and lead unlocked for resubmission", "submission_id": submission_id, "lead_id": lead_id}
 
 
 @router.get('/leads/submissions/export')

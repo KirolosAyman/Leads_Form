@@ -208,6 +208,16 @@ const AdminDashboard = () => {
         fetchSubmissions({ agentName: '', dateFrom: '', dateTo: '' });
     };
 
+    const deleteSubmission = async (submissionId, leadId) => {
+        if (!window.confirm(`Delete this submission for Lead #${leadId}?\nThis will unlock the lead so the agent can submit it again.`)) return;
+        try {
+            await api.delete(`/leads/submissions/${submissionId}`);
+            fetchSubmissions();
+        } catch (err) {
+            alert(err.response?.data?.detail || 'Failed to delete submission');
+        }
+    };
+
     const exportSubmissions = async (format) => {
         try {
             const res = await api.get(`/leads/submissions/export?format=${format}`, { responseType: 'blob' });
@@ -572,12 +582,13 @@ const AdminDashboard = () => {
                                         <th style={thStyle}>Submitted By</th>
                                         <th style={thStyle}>Submitted At</th>
                                         <th style={{ ...thStyle, textAlign: 'center' }}>API Data</th>
+                                        <th style={{ ...thStyle, textAlign: 'center' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {submissions.length === 0 && (
                                         <tr>
-                                            <td colSpan="6" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                                            <td colSpan="7" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                                                 {(filterAgentName || filterDateFrom || filterDateTo)
                                                     ? 'No submissions match the selected filters.'
                                                     : 'No submissions yet.'}
@@ -662,6 +673,28 @@ const AdminDashboard = () => {
                                                         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(120,80,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
                                                     >
                                                         <Eye size={14} /> View
+                                                    </button>
+                                                </td>
+
+                                                {/* Delete submission button */}
+                                                <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                                    <button
+                                                        id={`delete-submission-${s.id}`}
+                                                        onClick={() => deleteSubmission(s.id, s.lead_id)}
+                                                        title="Delete submission and unlock lead for resubmission"
+                                                        style={{
+                                                            background: 'rgba(255,70,70,0.08)',
+                                                            border: '1px solid rgba(255,70,70,0.3)',
+                                                            color: '#ff6b6b',
+                                                            padding: '6px 10px', borderRadius: '8px',
+                                                            cursor: 'pointer', fontSize: '0.8rem',
+                                                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                                            transition: 'all 0.2s',
+                                                        }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,70,70,0.2)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(255,70,70,0.3)'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,70,70,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}
+                                                    >
+                                                        <Trash2 size={14} /> Delete
                                                     </button>
                                                 </td>
                                             </tr>
