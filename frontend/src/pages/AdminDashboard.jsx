@@ -86,6 +86,11 @@ const AdminDashboard = () => {
     const [submissions, setSubmissions] = useState([]);
     const [loadingSubmissions, setLoadingSubmissions] = useState(false);
 
+    // Submission filters
+    const [filterAgentName, setFilterAgentName] = useState('');
+    const [filterDateFrom, setFilterDateFrom]   = useState('');
+    const [filterDateTo, setFilterDateTo]       = useState('');
+
     // Submissions modals
     const [leadModal, setLeadModal] = useState(null);   // null | 'loading' | lead object
     const [apiModal, setApiModal]   = useState(null);   // null | submission object
@@ -178,11 +183,29 @@ const AdminDashboard = () => {
         } catch { alert('Failed to export leads'); }
     };
 
-    const fetchSubmissions = async () => {
+    const fetchSubmissions = async (overrides = {}) => {
         setLoadingSubmissions(true);
-        try { const res = await api.get('/leads/submissions'); setSubmissions(res.data || []); }
+        try {
+            const agentName = overrides.agentName !== undefined ? overrides.agentName : filterAgentName;
+            const dateFrom  = overrides.dateFrom  !== undefined ? overrides.dateFrom  : filterDateFrom;
+            const dateTo    = overrides.dateTo    !== undefined ? overrides.dateTo    : filterDateTo;
+            const params = new URLSearchParams();
+            if (agentName.trim()) params.set('agent_name', agentName.trim());
+            if (dateFrom)         params.set('date_from', dateFrom);
+            if (dateTo)           params.set('date_to', dateTo);
+            const qs = params.toString() ? `?${params.toString()}` : '';
+            const res = await api.get(`/leads/submissions${qs}`);
+            setSubmissions(res.data || []);
+        }
         catch { alert('Failed to load submissions'); }
         finally { setLoadingSubmissions(false); }
+    };
+
+    const clearSubmissionFilters = () => {
+        setFilterAgentName('');
+        setFilterDateFrom('');
+        setFilterDateTo('');
+        fetchSubmissions({ agentName: '', dateFrom: '', dateTo: '' });
     };
 
     const exportSubmissions = async (format) => {
@@ -458,12 +481,85 @@ const AdminDashboard = () => {
                     {/* Toolbar */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                         <h2 style={{ margin: 0 }}>Submission Reports</h2>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button className="btn-primary" onClick={fetchSubmissions}>Refresh</button>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button className="btn-primary" onClick={() => fetchSubmissions()}>Refresh</button>
                             <button className="btn-secondary" onClick={() => exportSubmissions('csv')}>Export CSV</button>
                             <button className="btn-secondary" onClick={() => exportSubmissions('xlsx')}>Export Excel</button>
                         </div>
                     </div>
+
+                    {/* ── Filter Bar ──────────────────────────────────────── */}
+                    <div style={{
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.09)',
+                        borderRadius: '14px',
+                        padding: '1.1rem 1.4rem',
+                        display: 'flex', alignItems: 'flex-end', gap: '1rem', flexWrap: 'wrap',
+                    }}>
+                        {/* Agent Name */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: '1 1 200px' }}>
+                            <label style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 600 }}>Agent Name</label>
+                            <input
+                                id="filter-agent-name"
+                                className="glass-input"
+                                style={{ margin: 0, padding: '8px 12px', fontSize: '0.88rem' }}
+                                placeholder="Search agent…"
+                                value={filterAgentName}
+                                onChange={e => setFilterAgentName(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && fetchSubmissions()}
+                            />
+                        </div>
+
+                        {/* Date From */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: '1 1 160px' }}>
+                            <label style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 600 }}>From Date</label>
+                            <input
+                                id="filter-date-from"
+                                type="date"
+                                className="glass-input"
+                                style={{ margin: 0, padding: '8px 12px', fontSize: '0.88rem', colorScheme: 'dark' }}
+                                value={filterDateFrom}
+                                onChange={e => setFilterDateFrom(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Date To */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: '1 1 160px' }}>
+                            <label style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 600 }}>To Date</label>
+                            <input
+                                id="filter-date-to"
+                                type="date"
+                                className="glass-input"
+                                style={{ margin: 0, padding: '8px 12px', fontSize: '0.88rem', colorScheme: 'dark' }}
+                                value={filterDateTo}
+                                onChange={e => setFilterDateTo(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', gap: '0.5rem', alignSelf: 'flex-end' }}>
+                            <button
+                                className="btn-primary"
+                                style={{ padding: '8px 20px', fontSize: '0.88rem' }}
+                                onClick={() => fetchSubmissions()}
+                            >Apply Filter</button>
+                            <button
+                                className="btn-secondary"
+                                style={{ padding: '8px 14px', fontSize: '0.88rem' }}
+                                onClick={clearSubmissionFilters}
+                            >Clear</button>
+                        </div>
+                    </div>
+
+                    {/* Result count */}
+                    {!loadingSubmissions && (
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                            {submissions.length} submission{submissions.length !== 1 ? 's' : ''} found
+                            {(filterAgentName || filterDateFrom || filterDateTo) && (
+                                <span style={{ marginLeft: '0.5rem', color: 'hsl(var(--secondary))' }}>(filtered)</span>
+                            )}
+                        </div>
+                    )}
 
                     {loadingSubmissions ? <p style={{ color: 'var(--text-muted)' }}>Loading…</p> : (
                         <div className="table-wrapper">
@@ -482,7 +578,9 @@ const AdminDashboard = () => {
                                     {submissions.length === 0 && (
                                         <tr>
                                             <td colSpan="6" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                                No submissions yet.
+                                                {(filterAgentName || filterDateFrom || filterDateTo)
+                                                    ? 'No submissions match the selected filters.'
+                                                    : 'No submissions yet.'}
                                             </td>
                                         </tr>
                                     )}
@@ -582,8 +680,16 @@ const AdminDashboard = () => {
             {leadModal && (
                 <div style={overlayStyle} onClick={() => setLeadModal(null)}>
                     <div style={{ ...modalBase, maxWidth: '680px' }} onClick={e => e.stopPropagation()}>
+                        {/* Close button always visible */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
+                            <button id="lead-modal-close" style={closeBtnStyle} onClick={() => setLeadModal(null)}><X size={18} /></button>
+                        </div>
+
                         {leadModal === 'loading' ? (
-                            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading lead…</div>
+                            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>⏳</div>
+                                Loading lead details…
+                            </div>
                         ) : (
                             <>
                                 {/* Modal header */}
@@ -597,7 +703,6 @@ const AdminDashboard = () => {
                                             {leadModal.is_submitted ? '✓ Submitted' : 'Pending'}
                                         </span>
                                     </div>
-                                    <button style={closeBtnStyle} onClick={() => setLeadModal(null)}><X size={18} /></button>
                                 </div>
 
                                 {/* Fields grid */}
@@ -630,12 +735,11 @@ const AdminDashboard = () => {
                 const payload = buildPayload(apiModal.details);
                 let parsedResponse = null;
                 try { parsedResponse = JSON.parse(apiModal.api_response); } catch { parsedResponse = null; }
-
                 return (
                     <div style={overlayStyle} onClick={() => setApiModal(null)}>
                         <div style={{ ...modalBase, maxWidth: '750px' }} onClick={e => e.stopPropagation()}>
 
-                            {/* Modal header */}
+                            {/* Close button always at top-right */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                                 <div>
                                     <h3 style={{ fontSize: '1.3rem', marginBottom: '4px' }}>API Submission Data</h3>
@@ -647,7 +751,7 @@ const AdminDashboard = () => {
                                         <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Legacy record — no API call made</span>
                                     )}
                                 </div>
-                                <button style={closeBtnStyle} onClick={() => setApiModal(null)}><X size={18} /></button>
+                                <button id="api-modal-close" style={closeBtnStyle} onClick={() => setApiModal(null)}><X size={18} /></button>
                             </div>
 
                             {payload ? (

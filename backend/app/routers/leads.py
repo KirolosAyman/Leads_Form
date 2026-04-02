@@ -1,12 +1,13 @@
 import os
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from typing import List
+from typing import List, Optional
+from datetime import date, datetime, timedelta
 import pandas as pd
 import io
 import json
@@ -247,15 +248,45 @@ async def delete_leads(req: DeleteLeadsRequest, db: Session = Depends(database.g
 
 
 @router.get('/leads/submissions')
-async def list_submissions(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.require_admin)):
-    subs = db.query(models.LeadSubmission).order_by(models.LeadSubmission.submitted_at.desc()).all()
-    out = []
+async def list_submissions(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.require_admin),
+    agent_name: Optional[str] = Query(None, description="Filter by agent name (partial match)"),
+    date_from: Optional[date] = Query(None, description="Filter submissions on or after this date (YYYY-MM-DD)"),
+    date_to: Optional[date] = Query(None, description="Filter submissions on or before this date (YYYY-MM-DD)"),
+):
     import json
+
+    query = db.query(models.LeadSubmission)
+
+    # ── Date filters (applied at the DB level) ───────────────────────────────
+    if date_from:
+        dt_from = datetime.combine(date_from, datetime.min.time())
+        query = query.filter(models.LeadSubmission.submitted_at >= dt_from)
+    if date_to:
+        dt_to = datetime.combine(date_to + timedelta(days=1), datetime.min.time())
+        query = query.filter(models.LeadSubmission.submitted_at < dt_to)
+
+    subs = query.order_by(models.LeadSubmission.submitted_at.desc()).all()
+
+    out = []
     for s in subs:
         try:
             details = json.loads(s.details) if s.details else None
         except Exception:
             details = s.details
+
+        # ── Agent name filter (applied after JSON parse) ─────────────────────
+        if agent_name:
+            name_in_details = (
+                details.get('agent_name', '') if isinstance(details, dict) else ''
+            ) or ''
+            submitted_by = details.get('submitted_by', {}) if isinstance(details, dict) else {}
+            full_name_fallback = f"{submitted_by.get('first_name', '')} {submitted_by.get('last_name', '')}".strip()
+            combined = (name_in_details + ' ' + full_name_fallback).lower()
+            if agent_name.lower() not in combined:
+                continue
+
         # Always pull the live phone from the Lead table so old snapshots show phone correctly
         lead = db.query(models.Lead).filter(models.Lead.id == s.lead_id).first()
         out.append({
